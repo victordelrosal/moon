@@ -475,29 +475,16 @@ canvas#trajectory{
 </div>
 
 <!-- Audio Mixer Panel -->
-<div id="audioPanel" style="display:none;position:fixed;top:70px;right:28px;z-index:50;width:300px;background:rgba(8,8,18,.95);border:1px solid rgba(255,255,255,.1);border-radius:18px;padding:20px;backdrop-filter:blur(24px);box-shadow:0 20px 60px rgba(0,0,0,.5)">
+<div id="audioPanel" style="display:none;position:fixed;top:70px;right:28px;z-index:50;width:320px;max-height:calc(100vh - 100px);overflow-y:auto;background:rgba(8,8,18,.95);border:1px solid rgba(255,255,255,.1);border-radius:18px;padding:20px;backdrop-filter:blur(24px);box-shadow:0 20px 60px rgba(0,0,0,.5)">
   <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
     <div style="font-family:'Orbitron',monospace;font-size:11px;letter-spacing:3px;color:var(--cyan)">AUDIO MIXER</div>
-    <div style="font-size:8px;letter-spacing:1.5px;color:var(--gray);text-transform:uppercase">Layer multiple feeds</div>
+    <div style="font-size:8px;letter-spacing:1.5px;color:var(--gray);text-transform:uppercase">Layer feeds simultaneously</div>
   </div>
-  <div id="audioChannels" style="display:flex;flex-direction:column;gap:4px"></div>
-  <div style="margin-top:14px;padding-top:10px;border-top:1px solid rgba(255,255,255,.05);display:flex;align-items:center;gap:10px">
-    <span style="font-size:9px;color:var(--gray);letter-spacing:1.5px;text-transform:uppercase">Master</span>
-    <input type="range" id="masterVol" min="0" max="100" value="50" style="flex:1;accent-color:#00e5ff" oninput="setMasterVolume(this.value)">
-    <span id="masterVolLabel" style="font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--gray);width:28px;text-align:right">50</span>
-  </div>
-  <div style="margin-top:12px;text-align:center">
+  <div id="audioChannels" style="display:flex;flex-direction:column;gap:6px"></div>
+  <div style="margin-top:14px;padding-top:10px;border-top:1px solid rgba(255,255,255,.05);text-align:center">
     <a href="https://www.nasa.gov/missions/artemis-ii/arow/" target="_blank" style="font-size:9px;letter-spacing:1.5px;color:var(--cyan);text-decoration:none;text-transform:uppercase;opacity:.6;transition:opacity .3s" onmouseenter="this.style.opacity='1'" onmouseleave="this.style.opacity='.6'">Open NASA AROW 3D Viewer &rarr;</a>
   </div>
 </div>
-
-<!-- YouTube players: full-size iframes behind everything, invisible but not clipped -->
-<div id="ytP0" style="position:fixed;bottom:0;left:0;width:320px;height:180px;opacity:0;pointer-events:none;z-index:-10"></div>
-<div id="ytP1" style="position:fixed;bottom:0;left:320px;width:320px;height:180px;opacity:0;pointer-events:none;z-index:-10"></div>
-<div id="ytP2" style="position:fixed;bottom:0;left:640px;width:320px;height:180px;opacity:0;pointer-events:none;z-index:-10"></div>
-<div id="ytP3" style="position:fixed;bottom:0;left:960px;width:320px;height:180px;opacity:0;pointer-events:none;z-index:-10"></div>
-<div id="ytP4" style="position:fixed;bottom:0;left:1280px;width:320px;height:180px;opacity:0;pointer-events:none;z-index:-10"></div>
-<div id="ytP5" style="position:fixed;bottom:0;left:1600px;width:320px;height:180px;opacity:0;pointer-events:none;z-index:-10"></div>
 
 <script>
 // ============================================================
@@ -957,88 +944,41 @@ function timeAgo(date){
 }
 
 // ============================================================
-//  AUDIO MIXER: Simultaneous layered YouTube feeds
+//  AUDIO MIXER: Direct iframe embeds (visible in UI = browser allows audio)
 // ============================================================
 const AUDIO_FEEDS = [
-  { id:'comms',    label:'Mission Control',   icon:'\u{1F4E1}', videoId:'m3kR2KK8TEs', desc:'Live air-to-ground comms',     vol:40, color:'#00ff88' },
-  { id:'ambient',  label:'Deep Space Ambient',icon:'\u{1F3B5}', videoId:'53zsGGcUEQg', desc:'Ambient soundscape',           vol:35, color:'#00e5ff' },
-  { id:'nasatv',   label:'NASA TV Live',      icon:'\u{1F4FA}', videoId:'nA9UZF-SZoQ', desc:'NASA Television stream',       vol:30, color:'#ff8c00' },
-  { id:'score',    label:'Gravity Score',      icon:'\u{1F30D}', videoId:'LZ-BsZq3RVs', desc:'Steven Price, cinematic',      vol:25, color:'#cc77ff' },
-  { id:'earthrise',label:'Space Odyssey',      icon:'\u{1F315}', videoId:'oU4Rk0NATNs', desc:'2001 ambient soundscape',     vol:25, color:'#ff5577' },
-  { id:'apollo',   label:'Apollo Era Comms',  icon:'\u{1F680}', videoId:'cAZpMtl9ZeE', desc:'Historic mission audio',       vol:30, color:'#ffcc00' },
+  { id:'comms',    label:'Mission Control',    videoId:'m3kR2KK8TEs', desc:'Air-to-ground comms',    color:'#00ff88' },
+  { id:'ambient',  label:'Deep Space Ambient', videoId:'53zsGGcUEQg', desc:'Ambient soundscape',     color:'#00e5ff' },
+  { id:'nasatv',   label:'NASA TV Live',       videoId:'nA9UZF-SZoQ', desc:'NASA Television',        color:'#ff8c00' },
+  { id:'apollo',   label:'Apollo Era Comms',   videoId:'cAZpMtl9ZeE', desc:'Historic mission audio', color:'#ffcc00' },
+  { id:'score',    label:'Gravity Score',      videoId:'LZ-BsZq3RVs', desc:'Cinematic soundtrack',   color:'#cc77ff' },
+  { id:'odyssey',  label:'Space Odyssey',      videoId:'oU4Rk0NATNs', desc:'2001 soundscape',        color:'#ff5577' },
 ];
 
-let ytPlayers = {};
-let channelState = {};  // {id: {playing:bool, vol:number}}
-let masterVolume = 50;
-
-// Load YouTube IFrame API
-const ytScript = document.createElement('script');
-ytScript.src = 'https://www.youtube.com/iframe_api';
-document.head.appendChild(ytScript);
-
-function onYouTubeIframeAPIReady(){
-  AUDIO_FEEDS.forEach((feed, i) => {
-    ytPlayers[feed.id] = new YT.Player('ytP' + i, {
-      width: '320', height: '180',
-      videoId: feed.videoId,
-      playerVars: {
-        autoplay: 0,
-        loop: 1,
-        playlist: feed.videoId,
-        controls: 0,
-        disablekb: 1,
-        fs: 0,
-        modestbranding: 1,
-        rel: 0
-      },
-      events: {
-        onReady: () => {
-          ytPlayers[feed.id]._ready = true;
-          ytPlayers[feed.id].setVolume(getEffectiveVol(feed.id));
-        },
-        onError: (e) => {
-          console.warn('YT player error for ' + feed.id + ':', e.data);
-        }
-      }
-    });
-    channelState[feed.id] = { playing: false, vol: feed.vol };
-  });
-}
-window.onYouTubeIframeAPIReady = onYouTubeIframeAPIReady;
-
-function getEffectiveVol(id){
-  return Math.round((channelState[id].vol / 100) * (masterVolume / 100) * 100);
-}
+let channelState = {};
 
 function buildAudioChannels(){
   const container = document.getElementById('audioChannels');
   container.innerHTML = '';
   AUDIO_FEEDS.forEach(feed => {
+    channelState[feed.id] = { playing: false };
     const ch = document.createElement('div');
     ch.id = 'ch-' + feed.id;
-    ch.style.cssText = `
-      display:flex;align-items:center;gap:8px;padding:10px 12px;
-      border-radius:12px;border:1px solid transparent;
-      background:rgba(255,255,255,.02);transition:all .3s;
-    `;
+    ch.style.cssText = 'padding:10px 12px;border-radius:12px;border:1px solid transparent;background:rgba(255,255,255,.02);transition:all .3s;';
     ch.innerHTML = `
-      <button id="chBtn-${feed.id}" onclick="toggleChannel('${feed.id}')" style="
-        width:32px;height:32px;border-radius:50%;border:1.5px solid rgba(255,255,255,.12);
-        background:transparent;cursor:pointer;display:flex;align-items:center;justify-content:center;
-        font-size:14px;transition:all .3s;flex-shrink:0;color:var(--gray);
-      ">${feed.icon}</button>
-      <div style="flex:1;min-width:0">
-        <div style="display:flex;align-items:center;gap:6px;margin-bottom:4px">
-          <span style="font-size:11px;color:var(--white);font-weight:500">${feed.label}</span>
-          <div id="chInd-${feed.id}" style="width:5px;height:5px;border-radius:50%;transition:all .4s"></div>
+      <div style="display:flex;align-items:center;gap:10px;cursor:pointer" onclick="toggleChannel('${feed.id}')">
+        <div id="chInd-${feed.id}" style="width:8px;height:8px;border-radius:50%;border:1.5px solid rgba(255,255,255,.15);flex-shrink:0;transition:all .4s"></div>
+        <div style="flex:1;min-width:0">
+          <div style="font-size:12px;color:var(--white);font-weight:500">${feed.label}</div>
+          <div style="font-size:9px;color:#555;margin-top:1px;letter-spacing:.5px">${feed.desc}</div>
         </div>
-        <div style="display:flex;align-items:center;gap:6px">
-          <input type="range" id="chVol-${feed.id}" min="0" max="100" value="${feed.vol}"
-            oninput="setChannelVol('${feed.id}', this.value)"
-            style="flex:1;accent-color:${feed.color};height:2px">
-          <span id="chVolLabel-${feed.id}" style="font-family:'JetBrains Mono',monospace;font-size:9px;color:var(--gray);width:22px;text-align:right">${feed.vol}</span>
-        </div>
+        <div id="chStatus-${feed.id}" style="font-size:8px;letter-spacing:1.5px;text-transform:uppercase;color:#333">OFF</div>
+      </div>
+      <div id="chPlayer-${feed.id}" style="margin-top:8px;display:none;border-radius:6px;overflow:hidden;height:36px;position:relative">
+        <iframe id="chFrame-${feed.id}" width="280" height="36" frameborder="0"
+          allow="autoplay; encrypted-media"
+          style="border:none;border-radius:6px;opacity:0.6;filter:brightness(0.4);"></iframe>
+        <div style="position:absolute;inset:0;background:linear-gradient(90deg,${feed.color}15,transparent);pointer-events:none;border-radius:6px"></div>
       </div>
     `;
     container.appendChild(ch);
@@ -1047,35 +987,35 @@ function buildAudioChannels(){
 
 function toggleChannel(id){
   const state = channelState[id];
-  const player = ytPlayers[id];
-  const btn = document.getElementById('chBtn-' + id);
-  const ind = document.getElementById('chInd-' + id);
-  const ch = document.getElementById('ch-' + id);
   const feed = AUDIO_FEEDS.find(f => f.id === id);
+  const ch = document.getElementById('ch-' + id);
+  const ind = document.getElementById('chInd-' + id);
+  const status = document.getElementById('chStatus-' + id);
+  const playerWrap = document.getElementById('chPlayer-' + id);
+  const frame = document.getElementById('chFrame-' + id);
 
   if(state.playing){
-    // Pause
-    if(player && player._ready) player.pauseVideo();
+    // Stop: kill iframe src
+    frame.src = '';
+    playerWrap.style.display = 'none';
     state.playing = false;
-    btn.style.borderColor = 'rgba(255,255,255,.12)';
-    btn.style.background = 'transparent';
-    btn.style.boxShadow = 'none';
     ind.style.background = 'transparent';
+    ind.style.borderColor = 'rgba(255,255,255,.15)';
     ind.style.boxShadow = 'none';
+    status.textContent = 'OFF';
+    status.style.color = '#333';
     ch.style.borderColor = 'transparent';
     ch.style.background = 'rgba(255,255,255,.02)';
   } else {
-    // Play
-    if(player && player._ready){
-      player.setVolume(getEffectiveVol(id));
-      player.playVideo();
-    }
+    // Play: set iframe src with autoplay
+    frame.src = 'https://www.youtube.com/embed/' + feed.videoId + '?autoplay=1&loop=1&playlist=' + feed.videoId + '&controls=1&modestbranding=1&rel=0&enablejsapi=1';
+    playerWrap.style.display = 'block';
     state.playing = true;
-    btn.style.borderColor = feed.color;
-    btn.style.background = feed.color + '15';
-    btn.style.boxShadow = '0 0 12px ' + feed.color + '40';
     ind.style.background = feed.color;
-    ind.style.boxShadow = '0 0 6px ' + feed.color;
+    ind.style.borderColor = feed.color;
+    ind.style.boxShadow = '0 0 8px ' + feed.color;
+    status.textContent = 'LIVE';
+    status.style.color = feed.color;
     ch.style.borderColor = feed.color + '30';
     ch.style.background = feed.color + '08';
   }
@@ -1083,32 +1023,9 @@ function toggleChannel(id){
   updateAudioBtnState();
 }
 
-function setChannelVol(id, val){
-  channelState[id].vol = parseInt(val);
-  document.getElementById('chVolLabel-' + id).textContent = val;
-  const player = ytPlayers[id];
-  if(player && player._ready && channelState[id].playing){
-    player.setVolume(getEffectiveVol(id));
-  }
-}
-
-function setMasterVolume(val){
-  masterVolume = parseInt(val);
-  document.getElementById('masterVolLabel').textContent = val;
-  // Update all playing channels
-  AUDIO_FEEDS.forEach(feed => {
-    const player = ytPlayers[feed.id];
-    if(player && player._ready && channelState[feed.id].playing){
-      player.setVolume(getEffectiveVol(feed.id));
-    }
-  });
-}
-
 function updateAudioBtnState(){
-  const anyPlaying = AUDIO_FEEDS.some(f => channelState[f.id].playing);
-  const btn = document.getElementById('audioBtn');
-  if(anyPlaying) btn.classList.add('playing');
-  else btn.classList.remove('playing');
+  const anyPlaying = AUDIO_FEEDS.some(f => channelState[f.id] && channelState[f.id].playing);
+  document.getElementById('audioBtn').classList.toggle('playing', anyPlaying);
 }
 
 function toggleAudioPanel(){
@@ -1116,7 +1033,6 @@ function toggleAudioPanel(){
   panel.style.display = panel.style.display === 'none' ? 'block' : 'none';
 }
 
-// Close panel on outside click
 document.addEventListener('click', e => {
   const panel = document.getElementById('audioPanel');
   const btn = document.getElementById('audioBtn');
