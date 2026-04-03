@@ -927,11 +927,12 @@ function parseHorizons(result){
 
 // Fetch through CORS proxies
 async function fetchViaProxy(url){
-  // Try CORS proxies in order; allorigins JSON wraps response in {contents: "..."}
+  // Primary: own Cloudflare Worker (no CORS issues, fastest)
+  // Fallback: public CORS proxies
   const proxies = [
+    {url: 'https://horizons-proxy.victordelrosal.workers.dev/?url=' + encodeURIComponent(url), wrap: false},
     {url: 'https://corsproxy.io/?' + encodeURIComponent(url), wrap: false},
     {url: 'https://api.allorigins.win/get?url=' + encodeURIComponent(url), wrap: true},
-    {url: 'https://api.codetabs.com/v1/proxy?quest=' + encodeURIComponent(url), wrap: false},
   ];
   for(const p of proxies){
     try {
@@ -943,7 +944,7 @@ async function fetchViaProxy(url){
       }
       return await r.json();
     } catch(e){
-      console.warn('Proxy failed:', p.url.slice(0,40), e.message);
+      console.warn('Proxy failed:', p.url.slice(0,50), e.message);
       continue;
     }
   }
