@@ -476,6 +476,7 @@ canvas#trajectory{
   <div id="ytP2"></div>
   <div id="ytP3"></div>
   <div id="ytP4"></div>
+  <div id="ytP5"></div>
 </div>
 
 <script>
@@ -725,7 +726,7 @@ async function fetchHorizons(){
   const later = new Date(now.getTime() + 3600000);
   const stop = later.toISOString().slice(0, 16).replace('T', ' ');
 
-  const url = `https://ssd.jpl.nasa.gov/api/horizons.api?format=json`
+  const baseUrl = `https://ssd.jpl.nasa.gov/api/horizons.api?format=json`
     + `&COMMAND='-1024'`
     + `&EPHEM_TYPE=VECTORS`
     + `&CENTER='500@399'`
@@ -734,8 +735,11 @@ async function fetchHorizons(){
     + `&STEP_SIZE='1'`
     + `&VEC_TABLE='2'`;
 
+  // Use CORS proxy since JPL Horizons doesn't set Access-Control-Allow-Origin
+  const proxyUrl = 'https://corsproxy.io/?' + encodeURIComponent(baseUrl);
+
   try {
-    const res = await fetch(url);
+    const res = await fetch(proxyUrl);
     const data = await res.json();
     const result = data.result || '';
 
@@ -941,6 +945,7 @@ const AUDIO_FEEDS = [
   { id:'nasatv',   label:'NASA TV Live',      icon:'\u{1F4FA}', videoId:'21X5lGlDOfg', desc:'NASA Television stream',       vol:30, color:'#ff8c00' },
   { id:'score',    label:'Interstellar Score', icon:'\u{1F30D}', videoId:'IDsCtDRV2uA', desc:'Hans Zimmer, cinematic',       vol:25, color:'#cc77ff' },
   { id:'earthrise',label:'Earthrise',         icon:'\u{1F315}', videoId:'CHSbx2L6CWE', desc:'Space documentary soundtrack', vol:25, color:'#ff5577' },
+  { id:'apollo',   label:'Apollo Era Comms',  icon:'\u{1F680}', videoId:'cAZpMtl9ZeE', desc:'Historic mission audio',       vol:30, color:'#ffcc00' },
 ];
 
 let ytPlayers = {};
@@ -957,7 +962,6 @@ function onYouTubeIframeAPIReady(){
     ytPlayers[feed.id] = new YT.Player('ytP' + i, {
       width: '320', height: '180',
       videoId: feed.videoId,
-      host: 'https://www.youtube-nocookie.com',
       playerVars: {
         autoplay: 0,
         loop: 1,
@@ -966,8 +970,7 @@ function onYouTubeIframeAPIReady(){
         disablekb: 1,
         fs: 0,
         modestbranding: 1,
-        rel: 0,
-        origin: location.origin
+        rel: 0
       },
       events: {
         onReady: () => {
