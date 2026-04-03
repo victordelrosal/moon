@@ -495,6 +495,10 @@ canvas#trajectory{
   <div class="right-panel">
     <div class="section-label" style="display:flex;align-items:center;gap:8px">
       Telemetry
+      <span style="display:inline-flex;align-items:center;gap:4px;font-size:8px;letter-spacing:1px;padding:2px 8px;border-radius:10px;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.08)">
+        <span id="srcDot" style="width:5px;height:5px;border-radius:50%;background:var(--gray)"></span>
+        <span id="srcLabel" style="color:var(--gray)">CONNECTING</span>
+      </span>
       <button class="info-btn-sm" onclick="document.getElementById('legendModal').style.display='flex'" title="Data sources">?</button>
     </div>
     <div class="telem-grid">
@@ -923,16 +927,25 @@ function parseHorizons(result){
 
 // Fetch through CORS proxies
 async function fetchViaProxy(url){
+  // Try CORS proxies in order; allorigins JSON wraps response in {contents: "..."}
   const proxies = [
-    'https://corsproxy.io/?' + encodeURIComponent(url),
-    'https://api.allorigins.win/raw?url=' + encodeURIComponent(url),
-    'https://api.codetabs.com/v1/proxy?quest=' + encodeURIComponent(url),
+    {url: 'https://corsproxy.io/?' + encodeURIComponent(url), wrap: false},
+    {url: 'https://api.allorigins.win/get?url=' + encodeURIComponent(url), wrap: true},
+    {url: 'https://api.codetabs.com/v1/proxy?quest=' + encodeURIComponent(url), wrap: false},
   ];
-  for(const proxy of proxies){
+  for(const p of proxies){
     try {
-      const r = await fetch(proxy, {signal: AbortSignal.timeout(10000)});
-      if(r.ok) return await r.json();
-    } catch(e){ continue; }
+      const r = await fetch(p.url, {signal: AbortSignal.timeout(10000)});
+      if(!r.ok) continue;
+      if(p.wrap){
+        const wrapper = await r.json();
+        return JSON.parse(wrapper.contents);
+      }
+      return await r.json();
+    } catch(e){
+      console.warn('Proxy failed:', p.url.slice(0,40), e.message);
+      continue;
+    }
   }
   return null;
 }
@@ -996,6 +1009,9 @@ async function fetchHorizons(){
     horizonsOK = true;
     document.getElementById('dataDot').className = 'data-dot';
     document.getElementById('dataStatus').textContent = 'JPL Horizons: Live telemetry';
+    document.getElementById('srcDot').style.background = 'var(--green)';
+    document.getElementById('srcLabel').textContent = 'JPL LIVE';
+    document.getElementById('srcLabel').style.color = 'var(--green)';
 
   } catch(err){
     console.warn('Horizons fetch failed, using simulation:', err);
@@ -1004,6 +1020,9 @@ async function fetchHorizons(){
     snapB = null;
     document.getElementById('dataDot').className = 'data-dot error';
     document.getElementById('dataStatus').textContent = 'JPL Horizons: Using simulated data';
+    document.getElementById('srcDot').style.background = '#ff6b35';
+    document.getElementById('srcLabel').textContent = 'SIMULATED';
+    document.getElementById('srcLabel').style.color = '#ff6b35';
     simulateTelemetry();
   }
 }
