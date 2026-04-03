@@ -153,7 +153,7 @@ canvas#trajectory{
   display:flex;align-items:center;position:relative;
 }
 .phase-dot{
-  width:10px;height:10px;border-radius:50%;
+  width:12px;height:12px;border-radius:50%;
   border:1.5px solid rgba(255,255,255,.15);background:transparent;
   position:relative;z-index:1;transition:all .3s;
 }
@@ -163,11 +163,11 @@ canvas#trajectory{
   box-shadow:0 0 12px var(--cyan);
   animation:pulse 2s ease-in-out infinite;
 }
-.phase-line{width:50px;height:1.5px;background:rgba(255,255,255,.08)}
+.phase-line{width:80px;height:1.5px;background:rgba(255,255,255,.08)}
 .phase-line.done{background:var(--cyan)}
 .phase-name{
-  position:absolute;top:18px;left:50%;transform:translateX(-50%);
-  white-space:nowrap;font-size:8px;letter-spacing:2px;
+  position:absolute;top:22px;left:50%;transform:translateX(-50%);
+  white-space:nowrap;font-size:9px;letter-spacing:2.5px;
   text-transform:uppercase;color:var(--gray);
 }
 .phase-dot.active .phase-name,.phase-dot.done .phase-name{color:var(--cyan)}
@@ -700,8 +700,8 @@ let trajectoryPoints = [];
 function resizeTraj(){
   const rect = trajCanvas.parentElement.getBoundingClientRect();
   const dpr = devicePixelRatio || 1;
-  const w = Math.min(rect.width - 20, 720);
-  const h = Math.min(rect.height - 60, 480);
+  const w = Math.min(rect.width - 20, 1400);
+  const h = Math.min(rect.height - 60, 900);
   trajCanvas.width  = w * dpr;
   trajCanvas.height = h * dpr;
   trajCanvas.style.width  = w + 'px';
@@ -734,40 +734,40 @@ function drawTrajectory(time){
   const moonX  = w * 0.82, moonY  = h * 0.42;
 
   // --- Earth glow ---
-  const eg = tctx.createRadialGradient(earthX, earthY, 5, earthX, earthY, 60);
+  const eg = tctx.createRadialGradient(earthX, earthY, 8, earthX, earthY, 100);
   eg.addColorStop(0, 'rgba(60,140,255,.15)');
   eg.addColorStop(1, 'transparent');
-  tctx.beginPath(); tctx.arc(earthX, earthY, 60, 0, Math.PI*2);
+  tctx.beginPath(); tctx.arc(earthX, earthY, 100, 0, Math.PI*2);
   tctx.fillStyle = eg; tctx.fill();
 
   // Earth
-  const eGrad = tctx.createRadialGradient(earthX-4, earthY-4, 2, earthX, earthY, 18);
+  const eGrad = tctx.createRadialGradient(earthX-6, earthY-6, 3, earthX, earthY, 32);
   eGrad.addColorStop(0, '#5599dd');
   eGrad.addColorStop(.6, '#2266aa');
   eGrad.addColorStop(1, '#113366');
-  tctx.beginPath(); tctx.arc(earthX, earthY, 18, 0, Math.PI*2);
+  tctx.beginPath(); tctx.arc(earthX, earthY, 32, 0, Math.PI*2);
   tctx.fillStyle = eGrad; tctx.fill();
   // Label
-  tctx.font = '9px "Space Grotesk"';
+  tctx.font = '11px "Space Grotesk"';
   tctx.fillStyle = 'rgba(255,255,255,.4)';
   tctx.textAlign = 'center';
-  tctx.fillText('EARTH', earthX, earthY + 32);
+  tctx.fillText('EARTH', earthX, earthY + 48);
 
   // --- Moon glow ---
-  const mg = tctx.createRadialGradient(moonX, moonY, 3, moonX, moonY, 35);
+  const mg = tctx.createRadialGradient(moonX, moonY, 5, moonX, moonY, 60);
   mg.addColorStop(0, 'rgba(200,200,200,.1)');
   mg.addColorStop(1, 'transparent');
-  tctx.beginPath(); tctx.arc(moonX, moonY, 35, 0, Math.PI*2);
+  tctx.beginPath(); tctx.arc(moonX, moonY, 60, 0, Math.PI*2);
   tctx.fillStyle = mg; tctx.fill();
 
   // Moon
-  const mGrad = tctx.createRadialGradient(moonX-3, moonY-3, 1, moonX, moonY, 10);
+  const mGrad = tctx.createRadialGradient(moonX-4, moonY-4, 2, moonX, moonY, 18);
   mGrad.addColorStop(0, '#ddd');
   mGrad.addColorStop(1, '#666');
-  tctx.beginPath(); tctx.arc(moonX, moonY, 10, 0, Math.PI*2);
+  tctx.beginPath(); tctx.arc(moonX, moonY, 18, 0, Math.PI*2);
   tctx.fillStyle = mGrad; tctx.fill();
   tctx.fillStyle = 'rgba(255,255,255,.4)';
-  tctx.fillText('MOON', moonX, moonY + 24);
+  tctx.fillText('MOON', moonX, moonY + 34);
 
   // --- Trajectory path ---
   // Draw as bezier curve (figure-8 free return)
@@ -820,18 +820,18 @@ function drawTrajectory(time){
   tctx.fillStyle = trail; tctx.fill();
 
   // Orion dot
-  tctx.beginPath(); tctx.arc(bx, by, 4, 0, Math.PI*2);
+  tctx.beginPath(); tctx.arc(bx, by, 6, 0, Math.PI*2);
   tctx.fillStyle = '#00e5ff';
   tctx.shadowColor = '#00e5ff';
-  tctx.shadowBlur = 12;
+  tctx.shadowBlur = 18;
   tctx.fill();
   tctx.shadowBlur = 0;
 
   // Label
-  tctx.font = '600 10px "Space Grotesk"';
+  tctx.font = '600 12px "Space Grotesk"';
   tctx.fillStyle = 'rgba(0,229,255,.8)';
   tctx.textAlign = 'left';
-  tctx.fillText('ORION', bx + 10, by - 8);
+  tctx.fillText('ORION', bx + 14, by - 10);
 
   // Distance line to Earth (faint)
   tctx.beginPath();
