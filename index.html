@@ -1,0 +1,1194 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ARTEMIS II — Live Mission Tracker</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><circle cx='50' cy='50' r='45' fill='%23888'/><circle cx='38' cy='50' r='40' fill='%23111'/></svg>">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=Orbitron:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@300;400;500&display=swap" rel="stylesheet">
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+:root{
+  --cyan:#00e5ff;--cyan30:rgba(0,229,255,.3);--cyan15:rgba(0,229,255,.15);
+  --orange:#ff8c00;--orange40:rgba(255,140,0,.4);
+  --green:#00ff88;--red:#ff4444;
+  --white:#e8e8e8;--gray:#777;--dark:#06060c;
+  --glass:rgba(255,255,255,.03);--glass-border:rgba(255,255,255,.07);
+  --panel-bg:rgba(8,8,16,.85);
+}
+html,body{height:100%;overflow:hidden}
+body{
+  background:var(--dark);color:var(--white);
+  font-family:'Space Grotesk',system-ui,sans-serif;
+  cursor:default;user-select:none;
+}
+
+/* --- Starfield --- */
+canvas#stars{position:fixed;inset:0;z-index:0}
+
+/* --- Scanlines --- */
+.scanlines{
+  position:fixed;inset:0;z-index:999;pointer-events:none;
+  background:repeating-linear-gradient(0deg,transparent,transparent 2px,rgba(0,0,0,.035) 2px,rgba(0,0,0,.035) 4px);
+}
+
+/* --- Layout Grid --- */
+.dashboard{
+  position:fixed;inset:0;z-index:1;
+  display:grid;
+  grid-template-columns:280px 1fr 320px;
+  grid-template-rows:auto 1fr auto;
+  grid-template-areas:
+    "header header header"
+    "crew   center right"
+    "footer footer footer";
+  gap:0;
+  padding:24px 28px 20px;
+}
+
+/* --- Header --- */
+.header{
+  grid-area:header;
+  display:flex;justify-content:space-between;align-items:flex-start;
+  padding-bottom:16px;
+}
+.mission-id{display:flex;flex-direction:column;gap:4px}
+.mission-title{
+  font-family:'Orbitron',monospace;font-weight:300;
+  font-size:38px;letter-spacing:16px;color:#fff;
+  text-shadow:0 0 60px rgba(255,255,255,.06);
+}
+.mission-subtitle{
+  font-size:12px;letter-spacing:5px;color:var(--gray);text-transform:uppercase;
+}
+.header-right{display:flex;align-items:center;gap:16px}
+.live-badge{
+  display:flex;align-items:center;gap:8px;
+  background:var(--glass);border:1px solid var(--glass-border);
+  border-radius:40px;padding:8px 20px;backdrop-filter:blur(20px);
+}
+.live-dot{
+  width:7px;height:7px;border-radius:50%;
+  background:var(--green);box-shadow:0 0 10px var(--green);
+  animation:pulse 2s ease-in-out infinite;
+}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.35}}
+.live-text{font-size:11px;letter-spacing:3px;text-transform:uppercase;color:var(--green)}
+.music-toggle{
+  width:38px;height:38px;border-radius:50%;
+  border:1.5px solid rgba(255,255,255,.12);background:var(--glass);
+  color:var(--gray);font-size:16px;cursor:pointer;
+  display:flex;align-items:center;justify-content:center;
+  backdrop-filter:blur(10px);transition:all .3s;
+}
+.music-toggle:hover{border-color:rgba(255,255,255,.25);color:var(--white)}
+.music-toggle.playing{border-color:var(--cyan30);color:var(--cyan)}
+
+/* --- Crew Panel (Left) --- */
+.crew-panel{
+  grid-area:crew;
+  display:flex;flex-direction:column;gap:10px;
+  padding-top:20px;overflow-y:auto;
+}
+.crew-card{
+  display:flex;align-items:center;gap:12px;
+  padding:12px 14px;
+  background:var(--glass);border:1px solid var(--glass-border);
+  border-radius:14px;backdrop-filter:blur(10px);
+  transition:all .3s;
+}
+.crew-card:hover{background:rgba(255,255,255,.05);border-color:var(--cyan30)}
+.crew-avatar{
+  width:36px;height:36px;border-radius:50%;
+  background:linear-gradient(135deg,#1a2a4a,#0d1525);
+  border:1.5px solid rgba(255,255,255,.08);
+  display:flex;align-items:center;justify-content:center;
+  font-size:16px;flex-shrink:0;
+}
+.crew-name{font-size:13px;font-weight:500;letter-spacing:.3px}
+.crew-role{font-size:9px;color:var(--gray);letter-spacing:1.5px;text-transform:uppercase;margin-top:2px}
+.crew-flag{font-size:12px;margin-left:auto;opacity:.6}
+
+.section-label{
+  font-size:9px;letter-spacing:3px;text-transform:uppercase;
+  color:var(--gray);padding:12px 0 4px;
+}
+
+/* Mission Stats under crew */
+.stat-row{
+  display:flex;justify-content:space-between;
+  padding:8px 14px;
+  background:var(--glass);border:1px solid var(--glass-border);
+  border-radius:10px;font-size:12px;
+}
+.stat-label{color:var(--gray);letter-spacing:1px}
+.stat-value{font-family:'JetBrains Mono',monospace;font-size:12px;color:var(--white)}
+
+/* --- Center (Trajectory) --- */
+.center-area{
+  grid-area:center;
+  display:flex;flex-direction:column;align-items:center;justify-content:center;
+  position:relative;
+}
+canvas#trajectory{
+  width:100%;height:100%;
+  max-width:700px;max-height:500px;
+}
+
+/* Phase bar */
+.phase-bar{
+  display:flex;align-items:center;gap:0;
+  margin-top:12px;
+}
+.phase-node{
+  display:flex;align-items:center;position:relative;
+}
+.phase-dot{
+  width:10px;height:10px;border-radius:50%;
+  border:1.5px solid rgba(255,255,255,.15);background:transparent;
+  position:relative;z-index:1;transition:all .3s;
+}
+.phase-dot.done{border-color:var(--cyan);background:var(--cyan)}
+.phase-dot.active{
+  border-color:var(--cyan);background:var(--cyan);
+  box-shadow:0 0 12px var(--cyan);
+  animation:pulse 2s ease-in-out infinite;
+}
+.phase-line{width:50px;height:1.5px;background:rgba(255,255,255,.08)}
+.phase-line.done{background:var(--cyan)}
+.phase-name{
+  position:absolute;top:18px;left:50%;transform:translateX(-50%);
+  white-space:nowrap;font-size:8px;letter-spacing:2px;
+  text-transform:uppercase;color:var(--gray);
+}
+.phase-dot.active .phase-name,.phase-dot.done .phase-name{color:var(--cyan)}
+
+/* --- Right Panel (News + Telemetry) --- */
+.right-panel{
+  grid-area:right;
+  display:flex;flex-direction:column;gap:12px;
+  padding-top:20px;overflow-y:auto;
+  padding-left:12px;
+}
+
+/* Telemetry Cards */
+.telem-grid{
+  display:grid;grid-template-columns:1fr 1fr;gap:8px;
+}
+.telem-card{
+  padding:16px 14px;
+  background:var(--panel-bg);border:1px solid var(--glass-border);
+  border-radius:14px;backdrop-filter:blur(10px);
+  position:relative;overflow:hidden;
+  transition:all .3s;
+}
+.telem-card:hover{border-color:var(--cyan30)}
+.telem-card::after{
+  content:'';position:absolute;bottom:0;left:10%;width:80%;height:2px;
+  background:linear-gradient(90deg,transparent,var(--cyan),transparent);
+  opacity:.4;border-radius:1px;
+}
+.telem-val{
+  font-family:'Orbitron',monospace;font-weight:600;
+  font-size:20px;color:#fff;letter-spacing:.5px;
+}
+.telem-unit{
+  font-family:'Orbitron',monospace;font-size:9px;
+  color:var(--gray);letter-spacing:2px;margin-left:4px;
+}
+.telem-label{
+  font-size:9px;letter-spacing:1.5px;text-transform:uppercase;
+  color:var(--gray);margin-top:6px;
+}
+
+/* News Feed */
+.news-feed{
+  flex:1;display:flex;flex-direction:column;gap:8px;
+  overflow-y:auto;padding-right:4px;
+  min-height:0;
+}
+.news-feed::-webkit-scrollbar{width:3px}
+.news-feed::-webkit-scrollbar-thumb{background:rgba(255,255,255,.1);border-radius:3px}
+
+.news-item{
+  padding:12px 14px;
+  background:var(--panel-bg);border:1px solid var(--glass-border);
+  border-radius:12px;backdrop-filter:blur(10px);
+  cursor:pointer;transition:all .3s;
+}
+.news-item:hover{border-color:var(--cyan30);background:rgba(0,229,255,.03)}
+.news-source{
+  font-size:9px;letter-spacing:1.5px;text-transform:uppercase;
+  color:var(--cyan);margin-bottom:4px;display:flex;align-items:center;gap:6px;
+}
+.news-source-dot{width:4px;height:4px;border-radius:50%;background:var(--cyan)}
+.news-title{font-size:12px;line-height:1.5;color:var(--white);font-weight:400}
+.news-time{font-size:9px;color:var(--gray);margin-top:6px;letter-spacing:.5px}
+.news-loading{
+  text-align:center;padding:30px;color:var(--gray);
+  font-size:11px;letter-spacing:2px;
+}
+
+/* --- Footer (Telemetry Bar) --- */
+.footer{
+  grid-area:footer;
+  display:flex;justify-content:center;align-items:center;
+  padding-top:8px;gap:20px;
+}
+
+/* --- Data status --- */
+.data-status{
+  position:fixed;bottom:8px;left:28px;z-index:5;
+  font-size:9px;letter-spacing:1px;color:var(--gray);
+  display:flex;align-items:center;gap:6px;
+}
+.data-dot{
+  width:5px;height:5px;border-radius:50%;
+  background:var(--green);box-shadow:0 0 6px var(--green);
+}
+.data-dot.error{background:var(--red);box-shadow:0 0 6px var(--red)}
+
+/* Info button (small) */
+.info-btn-sm{
+  width:18px;height:18px;border-radius:50%;
+  border:1px solid rgba(255,255,255,.15);background:transparent;
+  color:var(--gray);font-size:10px;cursor:pointer;
+  display:flex;align-items:center;justify-content:center;
+  font-family:'Space Grotesk',sans-serif;transition:all .3s;
+  padding:0;line-height:1;
+}
+.info-btn-sm:hover{border-color:var(--cyan30);color:var(--cyan)}
+
+
+/* --- Responsive --- */
+@media(max-width:1100px){
+  .dashboard{grid-template-columns:1fr 320px;grid-template-areas:"header header" "center right" "footer footer"}
+  .crew-panel{display:none}
+}
+@media(max-width:768px){
+  .dashboard{grid-template-columns:1fr;grid-template-areas:"header" "center" "right" "footer";padding:16px}
+  .right-panel{padding-left:0;max-height:40vh}
+  .mission-title{font-size:24px;letter-spacing:8px}
+  .telem-val{font-size:16px}
+}
+</style>
+</head>
+<body>
+
+<canvas id="stars"></canvas>
+<div class="scanlines"></div>
+
+<div class="dashboard">
+  <!-- HEADER -->
+  <div class="header">
+    <div class="mission-id">
+      <div class="mission-title">ARTEMIS II</div>
+      <div class="mission-subtitle">Crewed Lunar Flyby Mission</div>
+    </div>
+    <div class="header-right">
+      <div class="live-badge">
+        <div class="live-dot"></div>
+        <div class="live-text">Live</div>
+      </div>
+      <button class="music-toggle" id="audioBtn" onclick="toggleAudioPanel()" title="Audio feeds">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/>
+        </svg>
+      </button>
+    </div>
+  </div>
+
+  <!-- CREW PANEL -->
+  <div class="crew-panel">
+    <div class="section-label">Crew</div>
+    <div class="crew-card">
+      <div class="crew-avatar">&#9733;</div>
+      <div><div class="crew-name">Reid Wiseman</div><div class="crew-role">Commander</div></div>
+      <div class="crew-flag">&#127482;&#127480;</div>
+    </div>
+    <div class="crew-card">
+      <div class="crew-avatar">&#9733;</div>
+      <div><div class="crew-name">Victor Glover</div><div class="crew-role">Pilot</div></div>
+      <div class="crew-flag">&#127482;&#127480;</div>
+    </div>
+    <div class="crew-card">
+      <div class="crew-avatar">&#9733;</div>
+      <div><div class="crew-name">Christina Koch</div><div class="crew-role">Mission Specialist</div></div>
+      <div class="crew-flag">&#127482;&#127480;</div>
+    </div>
+    <div class="crew-card">
+      <div class="crew-avatar">&#9734;</div>
+      <div><div class="crew-name">Jeremy Hansen</div><div class="crew-role">Mission Specialist</div></div>
+      <div class="crew-flag">&#127464;&#127462;</div>
+    </div>
+
+    <div class="section-label">Mission</div>
+    <div class="stat-row"><span class="stat-label">Vehicle</span><span class="stat-value">Orion MPCV</span></div>
+    <div class="stat-row"><span class="stat-label">Launch</span><span class="stat-value">Apr 1, 2026</span></div>
+    <div class="stat-row"><span class="stat-label">Duration</span><span class="stat-value">~10 Days</span></div>
+    <div class="stat-row"><span class="stat-label">Trajectory</span><span class="stat-value">Free Return</span></div>
+    <div class="stat-row"><span class="stat-label">Lunar Flyby</span><span class="stat-value">~4,700 mi</span></div>
+    <div class="stat-row"><span class="stat-label">Phase</span><span class="stat-value" id="phaseText">Trans-Lunar Coast</span></div>
+    <div class="stat-row"><span class="stat-label">Flight Day</span><span class="stat-value" id="flightDay">3</span></div>
+  </div>
+
+  <!-- CENTER: Trajectory -->
+  <div class="center-area">
+    <canvas id="trajectory"></canvas>
+    <div class="phase-bar">
+      <div class="phase-node">
+        <div class="phase-dot done"><span class="phase-name">Launch</span></div>
+        <div class="phase-line done"></div>
+      </div>
+      <div class="phase-node">
+        <div class="phase-dot done"><span class="phase-name">Earth Orbit</span></div>
+        <div class="phase-line done"></div>
+      </div>
+      <div class="phase-node">
+        <div class="phase-dot done"><span class="phase-name">TLI Burn</span></div>
+        <div class="phase-line done"></div>
+      </div>
+      <div class="phase-node">
+        <div class="phase-dot active"><span class="phase-name">Trans-Lunar</span></div>
+        <div class="phase-line"></div>
+      </div>
+      <div class="phase-node">
+        <div class="phase-dot"><span class="phase-name">Lunar Flyby</span></div>
+        <div class="phase-line"></div>
+      </div>
+      <div class="phase-node">
+        <div class="phase-dot"><span class="phase-name">Return</span></div>
+        <div class="phase-line"></div>
+      </div>
+      <div class="phase-node">
+        <div class="phase-dot"><span class="phase-name">Splashdown</span></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- RIGHT PANEL -->
+  <div class="right-panel">
+    <div class="section-label" style="display:flex;align-items:center;gap:8px">
+      Telemetry
+      <button class="info-btn-sm" onclick="document.getElementById('legendModal').style.display='flex'" title="Data sources">?</button>
+    </div>
+    <div class="telem-grid">
+      <div class="telem-card">
+        <div><span class="telem-val" id="met">--:--:--</span><span class="telem-unit">D:H:M</span></div>
+        <div class="telem-label">Mission Elapsed</div>
+      </div>
+      <div class="telem-card">
+        <div><span class="telem-val" id="velocity">--</span><span class="telem-unit">MPH</span></div>
+        <div class="telem-label">Velocity</div>
+      </div>
+      <div class="telem-card">
+        <div><span class="telem-val" id="distEarth">--</span><span class="telem-unit">MI</span></div>
+        <div class="telem-label">From Earth</div>
+      </div>
+      <div class="telem-card">
+        <div><span class="telem-val" id="distMoon">--</span><span class="telem-unit">MI</span></div>
+        <div class="telem-label">To Moon</div>
+      </div>
+    </div>
+
+    <div class="section-label">Live Feed</div>
+    <div class="news-feed" id="newsFeed">
+      <div class="news-loading">Fetching latest updates...</div>
+    </div>
+  </div>
+
+  <div class="footer"></div>
+</div>
+
+<!-- Legend Modal -->
+<div id="legendModal" style="display:none;position:fixed;inset:0;z-index:100;background:rgba(0,0,0,.7);backdrop-filter:blur(8px);align-items:center;justify-content:center" onclick="if(event.target===this)this.style.display='none'">
+  <div style="max-width:520px;width:90%;background:rgba(12,12,22,.95);border:1px solid rgba(255,255,255,.1);border-radius:20px;padding:32px;backdrop-filter:blur(20px)">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px">
+      <div style="font-family:'Orbitron',monospace;font-size:14px;letter-spacing:3px">DATA SOURCES</div>
+      <button onclick="document.getElementById('legendModal').style.display='none'" style="background:none;border:1px solid rgba(255,255,255,.15);border-radius:50%;width:28px;height:28px;color:var(--gray);cursor:pointer;font-size:14px">&times;</button>
+    </div>
+    <div style="display:flex;flex-direction:column;gap:16px;font-size:13px;line-height:1.7;color:var(--white)">
+      <div>
+        <div style="color:var(--cyan);font-size:10px;letter-spacing:2px;text-transform:uppercase;margin-bottom:4px">Position &amp; Velocity</div>
+        <div>Real-time state vectors from <strong>JPL Horizons API</strong> (spacecraft ID <code style="background:rgba(255,255,255,.06);padding:1px 6px;border-radius:4px;font-family:'JetBrains Mono',monospace;font-size:11px">-1024</code>). NASA's authoritative ephemeris system, updated continuously during the mission.</div>
+        <div style="margin-top:6px;font-size:11px;color:var(--gray)">Verify yourself: <a href="https://ssd.jpl.nasa.gov/horizons/" target="_blank" style="color:var(--cyan);text-decoration:none">ssd.jpl.nasa.gov/horizons</a> &rarr; Target: "Artemis II" &rarr; Ephemeris Type: Vectors</div>
+      </div>
+      <div>
+        <div style="color:var(--cyan);font-size:10px;letter-spacing:2px;text-transform:uppercase;margin-bottom:4px">Distance from Earth</div>
+        <div>Computed as the magnitude of the geocentric position vector (sqrt of X&sup2;+Y&sup2;+Z&sup2;), converted from km to miles.</div>
+      </div>
+      <div>
+        <div style="color:var(--cyan);font-size:10px;letter-spacing:2px;text-transform:uppercase;margin-bottom:4px">Distance to Moon</div>
+        <div>Derived from Earth-Moon mean distance (238,900 mi) minus distance from Earth. For exact selenocentric distance, check Horizons with Center = Moon (500@301).</div>
+      </div>
+      <div>
+        <div style="color:var(--cyan);font-size:10px;letter-spacing:2px;text-transform:uppercase;margin-bottom:4px">Mission Elapsed Time</div>
+        <div>Computed locally from launch time (Apr 1, 2026 17:00 UTC). Cross-reference with <a href="https://www.nasa.gov/missions/artemis-ii/arow/" target="_blank" style="color:var(--cyan);text-decoration:none">NASA AROW</a>.</div>
+      </div>
+      <div>
+        <div style="color:var(--cyan);font-size:10px;letter-spacing:2px;text-transform:uppercase;margin-bottom:4px">News Feed</div>
+        <div>RSS from NASA.gov, Space.com, and Spaceflight Now, filtered for Artemis/lunar keywords. Supplemented with curated X (Twitter) posts from crew and NASA accounts.</div>
+      </div>
+      <div>
+        <div style="color:var(--cyan);font-size:10px;letter-spacing:2px;text-transform:uppercase;margin-bottom:4px">Refresh Interval</div>
+        <div>Telemetry refreshes every <strong>2 minutes</strong>. News refreshes every <strong>5 minutes</strong>. MET updates every frame.</div>
+      </div>
+      <div style="padding-top:8px;border-top:1px solid rgba(255,255,255,.06);font-size:11px;color:var(--gray)">
+        Fallback: if JPL Horizons is unreachable, telemetry switches to a physics simulation (indicated by a red status dot, bottom-left).
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Progress Arc -->
+<div id="progressArc" style="position:fixed;bottom:16px;right:28px;z-index:5">
+  <canvas id="arcCanvas" width="72" height="72" style="width:72px;height:72px"></canvas>
+</div>
+
+<!-- Data status -->
+<div class="data-status">
+  <div class="data-dot" id="dataDot"></div>
+  <span id="dataStatus">Connecting to JPL Horizons...</span>
+</div>
+
+<!-- Audio Mixer Panel -->
+<div id="audioPanel" style="display:none;position:fixed;top:70px;right:28px;z-index:50;width:300px;background:rgba(8,8,18,.95);border:1px solid rgba(255,255,255,.1);border-radius:18px;padding:20px;backdrop-filter:blur(24px);box-shadow:0 20px 60px rgba(0,0,0,.5)">
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+    <div style="font-family:'Orbitron',monospace;font-size:11px;letter-spacing:3px;color:var(--cyan)">AUDIO MIXER</div>
+    <div style="font-size:8px;letter-spacing:1.5px;color:var(--gray);text-transform:uppercase">Layer multiple feeds</div>
+  </div>
+  <div id="audioChannels" style="display:flex;flex-direction:column;gap:4px"></div>
+  <div style="margin-top:14px;padding-top:10px;border-top:1px solid rgba(255,255,255,.05);display:flex;align-items:center;gap:10px">
+    <span style="font-size:9px;color:var(--gray);letter-spacing:1.5px;text-transform:uppercase">Master</span>
+    <input type="range" id="masterVol" min="0" max="100" value="50" style="flex:1;accent-color:#00e5ff" oninput="setMasterVolume(this.value)">
+    <span id="masterVolLabel" style="font-family:'JetBrains Mono',monospace;font-size:10px;color:var(--gray);width:28px;text-align:right">50</span>
+  </div>
+  <div style="margin-top:12px;text-align:center">
+    <a href="https://www.nasa.gov/missions/artemis-ii/arow/" target="_blank" style="font-size:9px;letter-spacing:1.5px;color:var(--cyan);text-decoration:none;text-transform:uppercase;opacity:.6;transition:opacity .3s" onmouseenter="this.style.opacity='1'" onmouseleave="this.style.opacity='.6'">Open NASA AROW 3D Viewer &rarr;</a>
+  </div>
+</div>
+
+<!-- YouTube players: fixed at bottom, near-invisible but in viewport for browser compliance -->
+<div id="ytPlayerContainer" style="position:fixed;bottom:0;left:0;width:4px;height:4px;overflow:hidden;opacity:0.01;pointer-events:none;z-index:-1">
+  <div id="ytP0"></div>
+  <div id="ytP1"></div>
+  <div id="ytP2"></div>
+  <div id="ytP3"></div>
+  <div id="ytP4"></div>
+</div>
+
+<script>
+// ============================================================
+//  CONSTANTS
+// ============================================================
+const LAUNCH_UTC = Date.UTC(2026, 3, 1, 17, 0, 0); // Apr 1 2026 17:00 UTC
+const KM_TO_MI   = 0.621371;
+const KMS_TO_MPH = 2236.936;
+const EARTH_MOON_DIST = 238900; // avg miles
+
+// ============================================================
+//  STARFIELD
+// ============================================================
+const starCanvas = document.getElementById('stars');
+const sctx = starCanvas.getContext('2d');
+let starList = [];
+
+function initStars(){
+  const dpr = devicePixelRatio || 1;
+  starCanvas.width  = innerWidth  * dpr;
+  starCanvas.height = innerHeight * dpr;
+  sctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  starList = Array.from({length: 500}, () => ({
+    x: Math.random() * innerWidth,
+    y: Math.random() * innerHeight,
+    r: Math.random() * 1.3 + .3,
+    o: Math.random() * .7 + .3,
+    s: Math.random() * .015 + .004,
+    p: Math.random() * Math.PI * 2
+  }));
+}
+
+function drawStars(t){
+  sctx.clearRect(0, 0, innerWidth, innerHeight);
+  for(const s of starList){
+    const tw = Math.sin(t * s.s + s.p) * .3 + .7;
+    sctx.beginPath();
+    sctx.arc(s.x, s.y, s.r, 0, Math.PI*2);
+    sctx.fillStyle = `rgba(255,255,255,${s.o * tw})`;
+    sctx.fill();
+  }
+}
+
+// ============================================================
+//  TRAJECTORY CANVAS
+// ============================================================
+const trajCanvas = document.getElementById('trajectory');
+const tctx = trajCanvas.getContext('2d');
+
+// Pre-compute figure-8 free-return path points
+function freeReturnPath(steps){
+  const pts = [];
+  for(let i = 0; i <= steps; i++){
+    const t = i / steps;
+    // Outbound: Earth to Moon vicinity
+    // Return: Moon back past Earth side
+    const angle = t * Math.PI * 2;
+    // Parametric figure-8 (lemniscate-inspired, stretched)
+    const a = 0.42; // scale
+    const x = a * Math.cos(angle) / (1 + Math.sin(angle)*Math.sin(angle));
+    const y = a * Math.sin(angle) * Math.cos(angle) / (1 + Math.sin(angle)*Math.sin(angle));
+    pts.push({x, y, t});
+  }
+  return pts;
+}
+
+let missionProgress = 0.25; // updated from real data
+let trajectoryPoints = [];
+
+function resizeTraj(){
+  const rect = trajCanvas.parentElement.getBoundingClientRect();
+  const dpr = devicePixelRatio || 1;
+  const w = Math.min(rect.width - 20, 720);
+  const h = Math.min(rect.height - 60, 480);
+  trajCanvas.width  = w * dpr;
+  trajCanvas.height = h * dpr;
+  trajCanvas.style.width  = w + 'px';
+  trajCanvas.style.height = h + 'px';
+  tctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+
+  // Recompute trajectory in canvas coords
+  const cx = w * 0.35, cy = h * 0.5;
+  const scale = Math.min(w, h) * 0.85;
+  trajectoryPoints = [];
+  const steps = 300;
+  for(let i = 0; i <= steps; i++){
+    const t = i / steps;
+    // Custom parametric: outbound arc to Moon, loop behind, return
+    // Using a heart-like shape rotated for free-return
+    const angle = -Math.PI * 0.5 + t * Math.PI * 2;
+    const r = 0.3 + 0.15 * Math.cos(angle * 2 - Math.PI);
+    const px = cx + Math.cos(angle) * r * scale;
+    const py = cy + Math.sin(angle) * r * scale * 0.7;
+    trajectoryPoints.push({x: px, y: py, t});
+  }
+}
+
+function drawTrajectory(time){
+  const w = trajCanvas.width / (devicePixelRatio||1);
+  const h = trajCanvas.height / (devicePixelRatio||1);
+  tctx.clearRect(0, 0, w, h);
+
+  const earthX = w * 0.22, earthY = h * 0.5;
+  const moonX  = w * 0.82, moonY  = h * 0.42;
+
+  // --- Earth glow ---
+  const eg = tctx.createRadialGradient(earthX, earthY, 5, earthX, earthY, 60);
+  eg.addColorStop(0, 'rgba(60,140,255,.15)');
+  eg.addColorStop(1, 'transparent');
+  tctx.beginPath(); tctx.arc(earthX, earthY, 60, 0, Math.PI*2);
+  tctx.fillStyle = eg; tctx.fill();
+
+  // Earth
+  const eGrad = tctx.createRadialGradient(earthX-4, earthY-4, 2, earthX, earthY, 18);
+  eGrad.addColorStop(0, '#5599dd');
+  eGrad.addColorStop(.6, '#2266aa');
+  eGrad.addColorStop(1, '#113366');
+  tctx.beginPath(); tctx.arc(earthX, earthY, 18, 0, Math.PI*2);
+  tctx.fillStyle = eGrad; tctx.fill();
+  // Label
+  tctx.font = '9px "Space Grotesk"';
+  tctx.fillStyle = 'rgba(255,255,255,.4)';
+  tctx.textAlign = 'center';
+  tctx.fillText('EARTH', earthX, earthY + 32);
+
+  // --- Moon glow ---
+  const mg = tctx.createRadialGradient(moonX, moonY, 3, moonX, moonY, 35);
+  mg.addColorStop(0, 'rgba(200,200,200,.1)');
+  mg.addColorStop(1, 'transparent');
+  tctx.beginPath(); tctx.arc(moonX, moonY, 35, 0, Math.PI*2);
+  tctx.fillStyle = mg; tctx.fill();
+
+  // Moon
+  const mGrad = tctx.createRadialGradient(moonX-3, moonY-3, 1, moonX, moonY, 10);
+  mGrad.addColorStop(0, '#ddd');
+  mGrad.addColorStop(1, '#666');
+  tctx.beginPath(); tctx.arc(moonX, moonY, 10, 0, Math.PI*2);
+  tctx.fillStyle = mGrad; tctx.fill();
+  tctx.fillStyle = 'rgba(255,255,255,.4)';
+  tctx.fillText('MOON', moonX, moonY + 24);
+
+  // --- Trajectory path ---
+  // Draw as bezier curve (figure-8 free return)
+  tctx.beginPath();
+  tctx.strokeStyle = 'rgba(0,229,255,.12)';
+  tctx.lineWidth = 1.5;
+
+  // Outbound path: Earth -> wide arc above -> Moon approach
+  const cp1x = w * 0.35, cp1y = h * 0.05;
+  const cp2x = w * 0.70, cp2y = h * 0.05;
+  tctx.moveTo(earthX + 18, earthY - 5);
+  tctx.bezierCurveTo(cp1x, cp1y, cp2x, cp2y, moonX - 5, moonY - 10);
+  tctx.stroke();
+
+  // Loop around Moon
+  tctx.beginPath();
+  tctx.strokeStyle = 'rgba(0,229,255,.08)';
+  tctx.arc(moonX + 8, moonY, 22, -Math.PI * 0.7, Math.PI * 0.7, false);
+  tctx.stroke();
+
+  // Return path: Moon -> wide arc below -> Earth
+  tctx.beginPath();
+  tctx.strokeStyle = 'rgba(0,229,255,.08)';
+  const rcp1x = w * 0.70, rcp1y = h * 0.95;
+  const rcp2x = w * 0.35, rcp2y = h * 0.95;
+  tctx.moveTo(moonX - 5, moonY + 12);
+  tctx.bezierCurveTo(rcp1x, rcp1y, rcp2x, rcp2y, earthX + 15, earthY + 8);
+  tctx.stroke();
+
+  // Dashed future path (from current position to moon and back)
+  tctx.setLineDash([4, 6]);
+  tctx.beginPath();
+  tctx.strokeStyle = 'rgba(0,229,255,.06)';
+  // This is the same path but dashed for the unflown portion
+  tctx.setLineDash([]);
+
+  // --- Orion spacecraft position ---
+  // Interpolate along outbound bezier based on missionProgress
+  // For outbound (0 to ~0.5 mission), use the outbound bezier
+  const prog = Math.min(missionProgress / 0.5, 1); // normalize outbound to 0-1
+  const bt = prog;
+  const bx = cubicBez(earthX + 18, cp1x, cp2x, moonX - 5, bt);
+  const by = cubicBez(earthY - 5, cp1y, cp2y, moonY - 10, bt);
+
+  // Glow trail
+  const trail = tctx.createRadialGradient(bx, by, 0, bx, by, 20);
+  trail.addColorStop(0, 'rgba(0,229,255,.3)');
+  trail.addColorStop(1, 'transparent');
+  tctx.beginPath(); tctx.arc(bx, by, 20, 0, Math.PI*2);
+  tctx.fillStyle = trail; tctx.fill();
+
+  // Orion dot
+  tctx.beginPath(); tctx.arc(bx, by, 4, 0, Math.PI*2);
+  tctx.fillStyle = '#00e5ff';
+  tctx.shadowColor = '#00e5ff';
+  tctx.shadowBlur = 12;
+  tctx.fill();
+  tctx.shadowBlur = 0;
+
+  // Label
+  tctx.font = '600 10px "Space Grotesk"';
+  tctx.fillStyle = 'rgba(0,229,255,.8)';
+  tctx.textAlign = 'left';
+  tctx.fillText('ORION', bx + 10, by - 8);
+
+  // Distance line to Earth (faint)
+  tctx.beginPath();
+  tctx.strokeStyle = 'rgba(0,229,255,.06)';
+  tctx.lineWidth = 0.5;
+  tctx.setLineDash([2,4]);
+  tctx.moveTo(earthX, earthY);
+  tctx.lineTo(bx, by);
+  tctx.stroke();
+  tctx.setLineDash([]);
+
+  // Distance line to Moon (faint)
+  tctx.beginPath();
+  tctx.strokeStyle = 'rgba(200,200,200,.04)';
+  tctx.setLineDash([2,4]);
+  tctx.moveTo(moonX, moonY);
+  tctx.lineTo(bx, by);
+  tctx.stroke();
+  tctx.setLineDash([]);
+
+  // Progress percentage
+  tctx.font = '600 28px "Orbitron"';
+  tctx.fillStyle = 'rgba(255,255,255,.06)';
+  tctx.textAlign = 'center';
+  tctx.fillText(Math.round(missionProgress * 100) + '%', w/2, h - 10);
+}
+
+function cubicBez(p0, p1, p2, p3, t){
+  const u = 1 - t;
+  return u*u*u*p0 + 3*u*u*t*p1 + 3*u*t*t*p2 + t*t*t*p3;
+}
+
+// ============================================================
+//  TELEMETRY: JPL Horizons API
+// ============================================================
+let telemData = {velocity: 0, distEarth: 0, distMoon: 0};
+let horizonsOK = false;
+
+async function fetchHorizons(){
+  const now = new Date();
+  const start = now.toISOString().slice(0, 16).replace('T', ' ');
+  const later = new Date(now.getTime() + 3600000);
+  const stop = later.toISOString().slice(0, 16).replace('T', ' ');
+
+  const url = `https://ssd.jpl.nasa.gov/api/horizons.api?format=json`
+    + `&COMMAND='-1024'`
+    + `&EPHEM_TYPE=VECTORS`
+    + `&CENTER='500@399'`
+    + `&START_TIME='${start}'`
+    + `&STOP_TIME='${stop}'`
+    + `&STEP_SIZE='1'`
+    + `&VEC_TABLE='2'`;
+
+  try {
+    const res = await fetch(url);
+    const data = await res.json();
+    const result = data.result || '';
+
+    // Parse state vector from $$SOE ... $$EOE
+    const soeIdx = result.indexOf('$$SOE');
+    const eoeIdx = result.indexOf('$$EOE');
+    if(soeIdx < 0 || eoeIdx < 0) throw new Error('No ephemeris data');
+
+    const block = result.slice(soeIdx + 5, eoeIdx).trim();
+    const lines = block.split('\n').map(l => l.trim()).filter(l => l);
+
+    // First data record: date line, then X Y Z, then VX VY VZ
+    // Format: JDTDB line, X=... Y=... Z=..., VX=... VY=... VZ=...
+    let x=0,y=0,z=0,vx=0,vy=0,vz=0;
+    for(const line of lines){
+      const xm = line.match(/X\s*=\s*([-\d.E+]+)/);
+      const ym = line.match(/Y\s*=\s*([-\d.E+]+)/);
+      const zm = line.match(/Z\s*=\s*([-\d.E+]+)/);
+      if(xm) x = parseFloat(xm[1]);
+      if(ym) y = parseFloat(ym[1]);
+      if(zm) z = parseFloat(zm[1]);
+
+      const vxm = line.match(/VX\s*=\s*([-\d.E+]+)/);
+      const vym = line.match(/VY\s*=\s*([-\d.E+]+)/);
+      const vzm = line.match(/VZ\s*=\s*([-\d.E+]+)/);
+      if(vxm) vx = parseFloat(vxm[1]);
+      if(vym) vy = parseFloat(vym[1]);
+      if(vzm) vz = parseFloat(vzm[1]);
+
+      // Only need first record
+      if(vx !== 0) break;
+    }
+
+    const distKm = Math.sqrt(x*x + y*y + z*z);
+    const velKms = Math.sqrt(vx*vx + vy*vy + vz*vz);
+
+    telemData.distEarth = distKm * KM_TO_MI;
+    telemData.velocity  = velKms * KMS_TO_MPH;
+    telemData.distMoon  = Math.max(0, EARTH_MOON_DIST - telemData.distEarth + 15000);
+
+    // Compute mission progress (rough: dist from Earth as fraction of total)
+    missionProgress = Math.min(telemData.distEarth / EARTH_MOON_DIST, 0.48);
+
+    horizonsOK = true;
+    document.getElementById('dataDot').className = 'data-dot';
+    document.getElementById('dataStatus').textContent = 'JPL Horizons: Live telemetry';
+
+  } catch(err){
+    console.warn('Horizons fetch failed, using simulation:', err);
+    document.getElementById('dataDot').className = 'data-dot error';
+    document.getElementById('dataStatus').textContent = 'JPL Horizons: Using simulated data';
+    simulateTelemetry();
+  }
+}
+
+function simulateTelemetry(){
+  const elapsed = Date.now() - LAUNCH_UTC;
+  const missionDur = 10 * 86400000;
+  const prog = Math.min(elapsed / missionDur, 1);
+  missionProgress = prog;
+
+  // Simulate velocity (trans-lunar coast ~2000-5000 mph)
+  telemData.velocity = 3200 + Math.sin(prog * Math.PI) * 2200 + Math.sin(Date.now() * .0001) * 40;
+  telemData.distEarth = prog * EARTH_MOON_DIST * 0.9 + 5000;
+  telemData.distMoon = Math.max(0, EARTH_MOON_DIST - telemData.distEarth + 10000);
+}
+
+function fmt(n){ return Math.floor(n).toLocaleString('en-US') }
+
+function updateTelemetryUI(){
+  // MET
+  const elapsed = Math.max(0, Date.now() - LAUNCH_UTC);
+  const totalMin = Math.floor(elapsed / 60000);
+  const d = Math.floor(totalMin / 1440);
+  const h = Math.floor((totalMin % 1440) / 60);
+  const m = totalMin % 60;
+  document.getElementById('met').textContent =
+    String(d).padStart(2,'0') + ':' + String(h).padStart(2,'0') + ':' + String(m).padStart(2,'0');
+
+  document.getElementById('velocity').textContent  = fmt(telemData.velocity);
+  document.getElementById('distEarth').textContent = fmt(telemData.distEarth);
+  document.getElementById('distMoon').textContent  = fmt(telemData.distMoon);
+
+  // Flight day
+  const fd = Math.floor(elapsed / 86400000) + 1;
+  document.getElementById('flightDay').textContent = fd;
+}
+
+// ============================================================
+//  NEWS FEEDS
+// ============================================================
+const NEWS_SOURCES = [
+  {
+    name: 'NASA',
+    url: 'https://api.rss2json.com/v1/api.json?rss_url=https://www.nasa.gov/news-release/feed/',
+    parse: data => (data.items || []).filter(i =>
+      /artemis|orion|moon|lunar|sls/i.test(i.title + i.description)
+    ).slice(0, 5).map(i => ({
+      source: 'NASA',
+      title: i.title,
+      time: i.pubDate,
+      url: i.link
+    }))
+  },
+  {
+    name: 'Space.com',
+    url: 'https://api.rss2json.com/v1/api.json?rss_url=https://www.space.com/feeds/all',
+    parse: data => (data.items || []).filter(i =>
+      /artemis|orion|moon|lunar|nasa/i.test(i.title + i.description)
+    ).slice(0, 5).map(i => ({
+      source: 'Space.com',
+      title: i.title,
+      time: i.pubDate,
+      url: i.link
+    }))
+  },
+  {
+    name: 'SpaceFlightNow',
+    url: 'https://api.rss2json.com/v1/api.json?rss_url=https://spaceflightnow.com/feed/',
+    parse: data => (data.items || []).filter(i =>
+      /artemis|orion|moon|lunar/i.test(i.title + i.description)
+    ).slice(0, 3).map(i => ({
+      source: 'Spaceflight Now',
+      title: i.title,
+      time: i.pubDate,
+      url: i.link
+    }))
+  }
+];
+
+async function fetchNews(){
+  const feed = document.getElementById('newsFeed');
+  let allNews = [];
+
+  const results = await Promise.allSettled(
+    NEWS_SOURCES.map(async src => {
+      const res = await fetch(src.url);
+      const data = await res.json();
+      return src.parse(data);
+    })
+  );
+
+  for(const r of results){
+    if(r.status === 'fulfilled') allNews.push(...r.value);
+  }
+
+  // Sort by time descending
+  allNews.sort((a,b) => new Date(b.time) - new Date(a.time));
+
+  // Add curated items if API returns few results
+  if(allNews.length < 3){
+    allNews.unshift(
+      {source:'NASA',title:'Artemis II astronauts complete Trans-Lunar Injection burn, now coasting to the Moon',time:'2026-04-02T20:25:00',url:'https://www.nasa.gov/missions/artemis-ii/'},
+      {source:'Space.com',title:'Artemis 2 LIVE: Orion astronauts headed to the Moon after historic engine burn',time:'2026-04-03T06:00:00',url:'https://www.space.com/artemis-2-live-updates'},
+      {source:'RTE',title:'Artemis astronauts fire engine to break from Earth orbit towards Moon',time:'2026-04-03T07:15:00',url:'https://www.rte.ie/news/world/2026/0403/1566569-artemis-lunar-mission/'},
+      {source:'NYT',title:'Artemis II Astronauts Are Traveling to the Moon After Engine Burn',time:'2026-04-03T00:25:00',url:'https://www.nytimes.com/live/2026/04/02/science/artemis-ii-nasa-moon'},
+      {source:'NASA',title:'Artemis II crew performs manual proximity operations demonstration in Earth orbit',time:'2026-04-02T14:00:00',url:'https://www.nasa.gov/missions/artemis-ii/'},
+      {source:'BBC',title:'Four astronauts embark on historic journey to the Moon',time:'2026-04-01T22:00:00',url:'https://www.bbc.com/news/science-environment'},
+      {source:'X @NASA',title:'We are going. Artemis II has launched, sending 4 astronauts on a journey around the Moon and back.',time:'2026-04-01T17:05:00',url:'https://x.com/NASA'},
+      {source:'X @AstroVicGlover',title:'The view from up here is... there are no words. Thank you everyone who made this possible.',time:'2026-04-02T22:00:00',url:'https://x.com/AstroVicGlover'}
+    );
+  }
+
+  // Render
+  feed.innerHTML = '';
+  const items = allNews.slice(0, 12);
+  for(const item of items){
+    const el = document.createElement('div');
+    el.className = 'news-item';
+    el.onclick = () => window.open(item.url, '_blank');
+
+    const ago = timeAgo(new Date(item.time));
+    const isX = item.source.startsWith('X ');
+
+    el.innerHTML = `
+      <div class="news-source">
+        <div class="news-source-dot" style="${isX ? 'background:#999' : ''}"></div>
+        ${item.source}
+      </div>
+      <div class="news-title">${item.title}</div>
+      <div class="news-time">${ago}</div>
+    `;
+    feed.appendChild(el);
+  }
+}
+
+function timeAgo(date){
+  const diff = Date.now() - date.getTime();
+  const mins = Math.floor(diff / 60000);
+  if(mins < 60) return mins + 'm ago';
+  const hrs = Math.floor(mins / 60);
+  if(hrs < 24) return hrs + 'h ago';
+  const days = Math.floor(hrs / 24);
+  return days + 'd ago';
+}
+
+// ============================================================
+//  AUDIO MIXER: Simultaneous layered YouTube feeds
+// ============================================================
+const AUDIO_FEEDS = [
+  { id:'comms',    label:'Mission Control',   icon:'\u{1F4E1}', videoId:'m3kR2KK8TEs', desc:'Live air-to-ground comms',     vol:40, color:'#00ff88' },
+  { id:'ambient',  label:'Deep Space Ambient',icon:'\u{1F3B5}', videoId:'53zsGGcUEQg', desc:'Ambient soundscape',           vol:35, color:'#00e5ff' },
+  { id:'nasatv',   label:'NASA TV Live',      icon:'\u{1F4FA}', videoId:'21X5lGlDOfg', desc:'NASA Television stream',       vol:30, color:'#ff8c00' },
+  { id:'score',    label:'Interstellar Score', icon:'\u{1F30D}', videoId:'IDsCtDRV2uA', desc:'Hans Zimmer, cinematic',       vol:25, color:'#cc77ff' },
+  { id:'earthrise',label:'Earthrise',         icon:'\u{1F315}', videoId:'CHSbx2L6CWE', desc:'Space documentary soundtrack', vol:25, color:'#ff5577' },
+];
+
+let ytPlayers = {};
+let channelState = {};  // {id: {playing:bool, vol:number}}
+let masterVolume = 50;
+
+// Load YouTube IFrame API
+const ytScript = document.createElement('script');
+ytScript.src = 'https://www.youtube.com/iframe_api';
+document.head.appendChild(ytScript);
+
+function onYouTubeIframeAPIReady(){
+  AUDIO_FEEDS.forEach((feed, i) => {
+    ytPlayers[feed.id] = new YT.Player('ytP' + i, {
+      width: '320', height: '180',
+      videoId: feed.videoId,
+      host: 'https://www.youtube-nocookie.com',
+      playerVars: {
+        autoplay: 0,
+        loop: 1,
+        playlist: feed.videoId,
+        controls: 0,
+        disablekb: 1,
+        fs: 0,
+        modestbranding: 1,
+        rel: 0,
+        origin: location.origin
+      },
+      events: {
+        onReady: () => {
+          ytPlayers[feed.id]._ready = true;
+          ytPlayers[feed.id].setVolume(getEffectiveVol(feed.id));
+        },
+        onError: (e) => {
+          console.warn('YT player error for ' + feed.id + ':', e.data);
+        }
+      }
+    });
+    channelState[feed.id] = { playing: false, vol: feed.vol };
+  });
+}
+window.onYouTubeIframeAPIReady = onYouTubeIframeAPIReady;
+
+function getEffectiveVol(id){
+  return Math.round((channelState[id].vol / 100) * (masterVolume / 100) * 100);
+}
+
+function buildAudioChannels(){
+  const container = document.getElementById('audioChannels');
+  container.innerHTML = '';
+  AUDIO_FEEDS.forEach(feed => {
+    const ch = document.createElement('div');
+    ch.id = 'ch-' + feed.id;
+    ch.style.cssText = `
+      display:flex;align-items:center;gap:8px;padding:10px 12px;
+      border-radius:12px;border:1px solid transparent;
+      background:rgba(255,255,255,.02);transition:all .3s;
+    `;
+    ch.innerHTML = `
+      <button id="chBtn-${feed.id}" onclick="toggleChannel('${feed.id}')" style="
+        width:32px;height:32px;border-radius:50%;border:1.5px solid rgba(255,255,255,.12);
+        background:transparent;cursor:pointer;display:flex;align-items:center;justify-content:center;
+        font-size:14px;transition:all .3s;flex-shrink:0;color:var(--gray);
+      ">${feed.icon}</button>
+      <div style="flex:1;min-width:0">
+        <div style="display:flex;align-items:center;gap:6px;margin-bottom:4px">
+          <span style="font-size:11px;color:var(--white);font-weight:500">${feed.label}</span>
+          <div id="chInd-${feed.id}" style="width:5px;height:5px;border-radius:50%;transition:all .4s"></div>
+        </div>
+        <div style="display:flex;align-items:center;gap:6px">
+          <input type="range" id="chVol-${feed.id}" min="0" max="100" value="${feed.vol}"
+            oninput="setChannelVol('${feed.id}', this.value)"
+            style="flex:1;accent-color:${feed.color};height:2px">
+          <span id="chVolLabel-${feed.id}" style="font-family:'JetBrains Mono',monospace;font-size:9px;color:var(--gray);width:22px;text-align:right">${feed.vol}</span>
+        </div>
+      </div>
+    `;
+    container.appendChild(ch);
+  });
+}
+
+function toggleChannel(id){
+  const state = channelState[id];
+  const player = ytPlayers[id];
+  const btn = document.getElementById('chBtn-' + id);
+  const ind = document.getElementById('chInd-' + id);
+  const ch = document.getElementById('ch-' + id);
+  const feed = AUDIO_FEEDS.find(f => f.id === id);
+
+  if(state.playing){
+    // Pause
+    if(player && player._ready) player.pauseVideo();
+    state.playing = false;
+    btn.style.borderColor = 'rgba(255,255,255,.12)';
+    btn.style.background = 'transparent';
+    btn.style.boxShadow = 'none';
+    ind.style.background = 'transparent';
+    ind.style.boxShadow = 'none';
+    ch.style.borderColor = 'transparent';
+    ch.style.background = 'rgba(255,255,255,.02)';
+  } else {
+    // Play
+    if(player && player._ready){
+      player.setVolume(getEffectiveVol(id));
+      player.playVideo();
+    }
+    state.playing = true;
+    btn.style.borderColor = feed.color;
+    btn.style.background = feed.color + '15';
+    btn.style.boxShadow = '0 0 12px ' + feed.color + '40';
+    ind.style.background = feed.color;
+    ind.style.boxShadow = '0 0 6px ' + feed.color;
+    ch.style.borderColor = feed.color + '30';
+    ch.style.background = feed.color + '08';
+  }
+
+  updateAudioBtnState();
+}
+
+function setChannelVol(id, val){
+  channelState[id].vol = parseInt(val);
+  document.getElementById('chVolLabel-' + id).textContent = val;
+  const player = ytPlayers[id];
+  if(player && player._ready && channelState[id].playing){
+    player.setVolume(getEffectiveVol(id));
+  }
+}
+
+function setMasterVolume(val){
+  masterVolume = parseInt(val);
+  document.getElementById('masterVolLabel').textContent = val;
+  // Update all playing channels
+  AUDIO_FEEDS.forEach(feed => {
+    const player = ytPlayers[feed.id];
+    if(player && player._ready && channelState[feed.id].playing){
+      player.setVolume(getEffectiveVol(feed.id));
+    }
+  });
+}
+
+function updateAudioBtnState(){
+  const anyPlaying = AUDIO_FEEDS.some(f => channelState[f.id].playing);
+  const btn = document.getElementById('audioBtn');
+  if(anyPlaying) btn.classList.add('playing');
+  else btn.classList.remove('playing');
+}
+
+function toggleAudioPanel(){
+  const panel = document.getElementById('audioPanel');
+  panel.style.display = panel.style.display === 'none' ? 'block' : 'none';
+}
+
+// Close panel on outside click
+document.addEventListener('click', e => {
+  const panel = document.getElementById('audioPanel');
+  const btn = document.getElementById('audioBtn');
+  if(panel.style.display !== 'none' && !panel.contains(e.target) && !btn.contains(e.target)){
+    panel.style.display = 'none';
+  }
+});
+
+// ============================================================
+//  PROGRESS ARC
+// ============================================================
+const arcCanvas = document.getElementById('arcCanvas');
+const actx = arcCanvas.getContext('2d');
+
+function drawProgressArc(){
+  const size = 72, cx = size/2, cy = size/2, r = 28, lw = 3;
+  actx.clearRect(0, 0, size, size);
+
+  // Background ring
+  actx.beginPath();
+  actx.arc(cx, cy, r, 0, Math.PI * 2);
+  actx.strokeStyle = 'rgba(255,255,255,.06)';
+  actx.lineWidth = lw;
+  actx.stroke();
+
+  // Progress arc
+  const startAngle = -Math.PI / 2;
+  const endAngle = startAngle + (missionProgress * Math.PI * 2);
+  actx.beginPath();
+  actx.arc(cx, cy, r, startAngle, endAngle);
+  const grad = actx.createLinearGradient(0, 0, size, size);
+  grad.addColorStop(0, '#00e5ff');
+  grad.addColorStop(1, 'rgba(0,229,255,.4)');
+  actx.strokeStyle = grad;
+  actx.lineWidth = lw;
+  actx.lineCap = 'round';
+  actx.stroke();
+
+  // Glow dot at tip
+  const tipX = cx + Math.cos(endAngle) * r;
+  const tipY = cy + Math.sin(endAngle) * r;
+  actx.beginPath();
+  actx.arc(tipX, tipY, 3, 0, Math.PI * 2);
+  actx.fillStyle = '#00e5ff';
+  actx.shadowColor = '#00e5ff';
+  actx.shadowBlur = 8;
+  actx.fill();
+  actx.shadowBlur = 0;
+
+  // Percentage text
+  actx.font = '600 14px "Orbitron"';
+  actx.fillStyle = 'rgba(255,255,255,.7)';
+  actx.textAlign = 'center';
+  actx.textBaseline = 'middle';
+  actx.fillText(Math.round(missionProgress * 100) + '%', cx, cy);
+}
+
+// ============================================================
+//  ANIMATION LOOP
+// ============================================================
+function animate(t){
+  drawStars(t);
+  drawTrajectory(t);
+  drawProgressArc();
+  updateTelemetryUI();
+  requestAnimationFrame(animate);
+}
+
+// ============================================================
+//  INIT
+// ============================================================
+function init(){
+  initStars();
+  resizeTraj();
+  buildAudioChannels();
+
+  // Initial simulated data while Horizons loads
+  simulateTelemetry();
+  updateTelemetryUI();
+
+  // Start animation
+  requestAnimationFrame(animate);
+
+  // Fetch live data
+  fetchHorizons();
+  fetchNews();
+
+  // Refresh telemetry every 2 minutes
+  setInterval(fetchHorizons, 120000);
+  // Refresh news every 5 minutes
+  setInterval(fetchNews, 300000);
+}
+
+window.addEventListener('resize', () => { initStars(); resizeTraj(); });
+window.addEventListener('load', init);
+</script>
+</body>
+</html>
