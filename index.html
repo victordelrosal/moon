@@ -852,76 +852,104 @@ function cubicBez(p0, p1, p2, p3, t){
 let telemData = {velocity: 0, distEarth: 0, distMoon: 0};
 let horizonsOK = false;
 
-async function fetchHorizons(){
+// Build a Horizons API URL for Orion (-1024) relative to a center body
+function horizonsUrl(center){
   const now = new Date();
-  const start = now.toISOString().slice(0, 16).replace('T', ' ');
-  const later = new Date(now.getTime() + 3600000);
-  const stop = later.toISOString().slice(0, 16).replace('T', ' ');
-
-  const baseUrl = `https://ssd.jpl.nasa.gov/api/horizons.api?format=json`
+  const start = now.toISOString().slice(0, 19);
+  const later = new Date(now.getTime() + 60000);
+  const stop = later.toISOString().slice(0, 19);
+  return `https://ssd.jpl.nasa.gov/api/horizons.api?format=json`
     + `&COMMAND='-1024'`
     + `&EPHEM_TYPE=VECTORS`
-    + `&CENTER='500@399'`
+    + `&CENTER='${center}'`
     + `&START_TIME='${start}'`
     + `&STOP_TIME='${stop}'`
-    + `&STEP_SIZE='1'`
+    + `&STEP_SIZE='1m'`
     + `&VEC_TABLE='2'`;
+}
 
-  // Try multiple CORS proxies
+// Parse Horizons text result into {dist (km), vel (km/s)}
+function parseHorizons(result){
+  const soeIdx = result.indexOf('$$SOE');
+  const eoeIdx = result.indexOf('$$EOE');
+  if(soeIdx < 0 || eoeIdx < 0) return null;
+  const block = result.slice(soeIdx + 5, eoeIdx).trim();
+  const lines = block.split('\n').map(l => l.trim()).filter(l => l);
+  let x=0,y=0,z=0,vx=0,vy=0,vz=0;
+  for(const line of lines){
+    const xm = line.match(/X\s*=\s*([-\d.E+]+)/);
+    const ym = line.match(/Y\s*=\s*([-\d.E+]+)/);
+    const zm = line.match(/Z\s*=\s*([-\d.E+]+)/);
+    if(xm) x = parseFloat(xm[1]);
+    if(ym) y = parseFloat(ym[1]);
+    if(zm) z = parseFloat(zm[1]);
+    const vxm = line.match(/VX\s*=\s*([-\d.E+]+)/);
+    const vym = line.match(/VY\s*=\s*([-\d.E+]+)/);
+    const vzm = line.match(/VZ\s*=\s*([-\d.E+]+)/);
+    if(vxm) vx = parseFloat(vxm[1]);
+    if(vym) vy = parseFloat(vym[1]);
+    if(vzm) vz = parseFloat(vzm[1]);
+    if(vx !== 0) break;
+  }
+  return {
+    dist: Math.sqrt(x*x + y*y + z*z),
+    vel: Math.sqrt(vx*vx + vy*vy + vz*vz)
+  };
+}
+
+// Fetch through CORS proxies
+async function fetchViaProxy(url){
   const proxies = [
-    'https://corsproxy.io/?' + encodeURIComponent(baseUrl),
-    'https://api.allorigins.win/raw?url=' + encodeURIComponent(baseUrl),
+    'https://corsproxy.io/?' + encodeURIComponent(url),
+    'https://api.allorigins.win/raw?url=' + encodeURIComponent(url),
+    'https://api.codetabs.com/v1/proxy?quest=' + encodeURIComponent(url),
   ];
+  for(const proxy of proxies){
+    try {
+      const r = await fetch(proxy, {signal: AbortSignal.timeout(10000)});
+      if(r.ok) return await r.json();
+    } catch(e){ continue; }
+  }
+  return null;
+}
 
+async function fetchHorizons(){
   try {
-    let data = null;
-    for(const proxy of proxies){
-      try {
-        const r = await fetch(proxy, {signal: AbortSignal.timeout(8000)});
-        if(r.ok){ data = await r.json(); break; }
-      } catch(e){ continue; }
-    }
-    if(!data) throw new Error('All proxies failed');
-    const result = data.result || '';
+    // Fetch Earth-centered and Moon-centered vectors in parallel
+    const [earthData, moonData] = await Promise.all([
+      fetchViaProxy(horizonsUrl('500@399')),
+      fetchViaProxy(horizonsUrl('500@301'))
+    ]);
 
-    // Parse state vector from $$SOE ... $$EOE
-    const soeIdx = result.indexOf('$$SOE');
-    const eoeIdx = result.indexOf('$$EOE');
-    if(soeIdx < 0 || eoeIdx < 0) throw new Error('No ephemeris data');
+    if(!earthData && !moonData) throw new Error('All proxies failed');
 
-    const block = result.slice(soeIdx + 5, eoeIdx).trim();
-    const lines = block.split('\n').map(l => l.trim()).filter(l => l);
+    let gotEarth = false, gotMoon = false;
 
-    // First data record: date line, then X Y Z, then VX VY VZ
-    // Format: JDTDB line, X=... Y=... Z=..., VX=... VY=... VZ=...
-    let x=0,y=0,z=0,vx=0,vy=0,vz=0;
-    for(const line of lines){
-      const xm = line.match(/X\s*=\s*([-\d.E+]+)/);
-      const ym = line.match(/Y\s*=\s*([-\d.E+]+)/);
-      const zm = line.match(/Z\s*=\s*([-\d.E+]+)/);
-      if(xm) x = parseFloat(xm[1]);
-      if(ym) y = parseFloat(ym[1]);
-      if(zm) z = parseFloat(zm[1]);
-
-      const vxm = line.match(/VX\s*=\s*([-\d.E+]+)/);
-      const vym = line.match(/VY\s*=\s*([-\d.E+]+)/);
-      const vzm = line.match(/VZ\s*=\s*([-\d.E+]+)/);
-      if(vxm) vx = parseFloat(vxm[1]);
-      if(vym) vy = parseFloat(vym[1]);
-      if(vzm) vz = parseFloat(vzm[1]);
-
-      // Only need first record
-      if(vx !== 0) break;
+    if(earthData && earthData.result){
+      const parsed = parseHorizons(earthData.result);
+      if(parsed){
+        telemData.distEarth = parsed.dist * KM_TO_MI;
+        telemData.velocity  = parsed.vel * KMS_TO_MPH;
+        gotEarth = true;
+      }
     }
 
-    const distKm = Math.sqrt(x*x + y*y + z*z);
-    const velKms = Math.sqrt(vx*vx + vy*vy + vz*vz);
+    if(moonData && moonData.result){
+      const parsed = parseHorizons(moonData.result);
+      if(parsed){
+        telemData.distMoon = parsed.dist * KM_TO_MI;
+        gotMoon = true;
+      }
+    }
 
-    telemData.distEarth = distKm * KM_TO_MI;
-    telemData.velocity  = velKms * KMS_TO_MPH;
-    telemData.distMoon  = Math.max(0, EARTH_MOON_DIST - telemData.distEarth + 15000);
+    if(!gotEarth) throw new Error('No Earth vector data');
 
-    // Compute mission progress (rough: dist from Earth as fraction of total)
+    // If Moon query failed, estimate from Earth distance
+    if(!gotMoon){
+      telemData.distMoon = Math.max(0, EARTH_MOON_DIST - telemData.distEarth + 16900);
+    }
+
+    // Mission progress
     missionProgress = Math.min(telemData.distEarth / EARTH_MOON_DIST, 0.48);
 
     horizonsOK = true;
