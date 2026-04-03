@@ -989,6 +989,9 @@ async function fetchHorizons(){
 
   } catch(err){
     console.warn('Horizons fetch failed, using simulation:', err);
+    horizonsOK = false;
+    snapA = null;
+    snapB = null;
     document.getElementById('dataDot').className = 'data-dot error';
     document.getElementById('dataStatus').textContent = 'JPL Horizons: Using simulated data';
     simulateTelemetry();
@@ -1056,8 +1059,9 @@ function interpolateTelemetry(){
 }
 
 function updateTelemetryUI(){
-  // Interpolate live data between API fetches
-  if(horizonsOK) interpolateTelemetry();
+  // Smooth updates: interpolate Horizons data, or re-run simulation each frame
+  if(horizonsOK && snapB) interpolateTelemetry();
+  else simulateTelemetry();
 
   // MET
   const elapsed = Math.max(0, Date.now() - LAUNCH_UTC);
