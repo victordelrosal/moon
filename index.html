@@ -949,10 +949,8 @@ function timeAgo(date){
 const AUDIO_FEEDS = [
   { id:'comms',    label:'Mission Control',    videoId:'m3kR2KK8TEs', desc:'Air-to-ground comms',    color:'#00ff88' },
   { id:'ambient',  label:'Deep Space Ambient', videoId:'53zsGGcUEQg', desc:'Ambient soundscape',     color:'#00e5ff' },
-  { id:'nasatv',   label:'NASA TV Live',       videoId:'nA9UZF-SZoQ', desc:'NASA Television',        color:'#ff8c00' },
   { id:'apollo',   label:'Apollo Era Comms',   videoId:'cAZpMtl9ZeE', desc:'Historic mission audio', color:'#ffcc00' },
   { id:'score',    label:'Gravity Score',      videoId:'LZ-BsZq3RVs', desc:'Cinematic soundtrack',   color:'#cc77ff' },
-  { id:'odyssey',  label:'Space Odyssey',      videoId:'oU4Rk0NATNs', desc:'2001 soundscape',        color:'#ff5577' },
 ];
 
 let channelState = {};
@@ -961,25 +959,20 @@ function buildAudioChannels(){
   const container = document.getElementById('audioChannels');
   container.innerHTML = '';
   AUDIO_FEEDS.forEach(feed => {
-    channelState[feed.id] = { playing: false };
+    channelState[feed.id] = { loaded: false };
     const ch = document.createElement('div');
     ch.id = 'ch-' + feed.id;
-    ch.style.cssText = 'padding:10px 12px;border-radius:12px;border:1px solid transparent;background:rgba(255,255,255,.02);transition:all .3s;';
+    ch.style.cssText = 'border-radius:12px;border:1px solid transparent;background:rgba(255,255,255,.02);transition:all .3s;overflow:hidden;';
     ch.innerHTML = `
-      <div style="display:flex;align-items:center;gap:10px;cursor:pointer" onclick="toggleChannel('${feed.id}')">
+      <div style="display:flex;align-items:center;gap:10px;padding:10px 12px;cursor:pointer" onclick="toggleChannel('${feed.id}')">
         <div id="chInd-${feed.id}" style="width:8px;height:8px;border-radius:50%;border:1.5px solid rgba(255,255,255,.15);flex-shrink:0;transition:all .4s"></div>
         <div style="flex:1;min-width:0">
           <div style="font-size:12px;color:var(--white);font-weight:500">${feed.label}</div>
           <div style="font-size:9px;color:#555;margin-top:1px;letter-spacing:.5px">${feed.desc}</div>
         </div>
-        <div id="chStatus-${feed.id}" style="font-size:8px;letter-spacing:1.5px;text-transform:uppercase;color:#333">OFF</div>
+        <div id="chStatus-${feed.id}" style="font-size:8px;letter-spacing:1.5px;text-transform:uppercase;color:#333">LOAD</div>
       </div>
-      <div id="chPlayer-${feed.id}" style="margin-top:8px;display:none;border-radius:6px;overflow:hidden;height:36px;position:relative">
-        <iframe id="chFrame-${feed.id}" width="280" height="36" frameborder="0"
-          allow="autoplay; encrypted-media"
-          style="border:none;border-radius:6px;opacity:0.6;filter:brightness(0.4);"></iframe>
-        <div style="position:absolute;inset:0;background:linear-gradient(90deg,${feed.color}15,transparent);pointer-events:none;border-radius:6px"></div>
-      </div>
+      <div id="chPlayer-${feed.id}" style="display:none;padding:0 8px 8px;"></div>
     `;
     container.appendChild(ch);
   });
@@ -992,29 +985,32 @@ function toggleChannel(id){
   const ind = document.getElementById('chInd-' + id);
   const status = document.getElementById('chStatus-' + id);
   const playerWrap = document.getElementById('chPlayer-' + id);
-  const frame = document.getElementById('chFrame-' + id);
 
-  if(state.playing){
-    // Stop: kill iframe src
-    frame.src = '';
+  if(state.loaded){
+    // Unload: destroy iframe
+    playerWrap.innerHTML = '';
     playerWrap.style.display = 'none';
-    state.playing = false;
+    state.loaded = false;
     ind.style.background = 'transparent';
     ind.style.borderColor = 'rgba(255,255,255,.15)';
     ind.style.boxShadow = 'none';
-    status.textContent = 'OFF';
+    status.textContent = 'LOAD';
     status.style.color = '#333';
     ch.style.borderColor = 'transparent';
     ch.style.background = 'rgba(255,255,255,.02)';
   } else {
-    // Play: set iframe src with autoplay
-    frame.src = 'https://www.youtube.com/embed/' + feed.videoId + '?autoplay=1&loop=1&playlist=' + feed.videoId + '&controls=1&modestbranding=1&rel=0&enablejsapi=1';
+    // Load: create fresh iframe with native YouTube controls
+    playerWrap.innerHTML = `<iframe
+      width="100%" height="60" frameborder="0"
+      allow="autoplay; encrypted-media"
+      src="https://www.youtube.com/embed/${feed.videoId}?loop=1&playlist=${feed.videoId}&controls=1&modestbranding=1&rel=0"
+      style="border:none;border-radius:8px;display:block;"></iframe>`;
     playerWrap.style.display = 'block';
-    state.playing = true;
+    state.loaded = true;
     ind.style.background = feed.color;
     ind.style.borderColor = feed.color;
     ind.style.boxShadow = '0 0 8px ' + feed.color;
-    status.textContent = 'LIVE';
+    status.textContent = 'ON';
     status.style.color = feed.color;
     ch.style.borderColor = feed.color + '30';
     ch.style.background = feed.color + '08';
@@ -1024,8 +1020,8 @@ function toggleChannel(id){
 }
 
 function updateAudioBtnState(){
-  const anyPlaying = AUDIO_FEEDS.some(f => channelState[f.id] && channelState[f.id].playing);
-  document.getElementById('audioBtn').classList.toggle('playing', anyPlaying);
+  const anyLoaded = AUDIO_FEEDS.some(f => channelState[f.id] && channelState[f.id].loaded);
+  document.getElementById('audioBtn').classList.toggle('playing', anyLoaded);
 }
 
 function toggleAudioPanel(){
