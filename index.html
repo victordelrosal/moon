@@ -999,11 +999,20 @@ function toggleChannel(id){
     ch.style.background = 'rgba(255,255,255,.02)';
   } else {
     // Load: create fresh iframe with native YouTube controls
-    playerWrap.innerHTML = `<div style="font-size:8px;color:${feed.color};letter-spacing:1px;text-transform:uppercase;margin-bottom:4px;opacity:.6">Press play below</div><iframe
-      width="100%" height="152" frameborder="0"
-      allow="autoplay; encrypted-media"
-      src="https://www.youtube.com/embed/${feed.videoId}?loop=1&playlist=${feed.videoId}&controls=1&modestbranding=1&rel=0"
-      style="border:none;border-radius:8px;display:block;"></iframe>`;
+    playerWrap.innerHTML = `
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
+        <span style="font-size:8px;color:${feed.color};letter-spacing:1px;text-transform:uppercase;opacity:.6">Press play below</span>
+        <div style="flex:1"></div>
+        <span style="font-size:8px;color:#555;letter-spacing:1px">VOL</span>
+        <input type="range" min="0" max="100" value="50" style="width:70px;accent-color:${feed.color};height:2px"
+          oninput="setChVolume('${feed.id}', this.value)">
+        <span id="volLbl-${feed.id}" style="font-family:'JetBrains Mono',monospace;font-size:9px;color:#555;width:20px;text-align:right">50</span>
+      </div>
+      <iframe id="frame-${feed.id}"
+        width="100%" height="152" frameborder="0"
+        allow="autoplay; encrypted-media"
+        src="https://www.youtube.com/embed/${feed.videoId}?loop=1&playlist=${feed.videoId}&controls=1&modestbranding=1&rel=0&enablejsapi=1&origin=${location.origin}"
+        style="border:none;border-radius:8px;display:block;"></iframe>`;
     playerWrap.style.display = 'block';
     state.loaded = true;
     ind.style.background = feed.color;
@@ -1016,6 +1025,16 @@ function toggleChannel(id){
   }
 
   updateAudioBtnState();
+}
+
+function setChVolume(id, val){
+  document.getElementById('volLbl-' + id).textContent = val;
+  const frame = document.getElementById('frame-' + id);
+  if(frame && frame.contentWindow){
+    frame.contentWindow.postMessage(JSON.stringify({
+      event: 'command', func: 'setVolume', args: [parseInt(val)]
+    }), '*');
+  }
 }
 
 function updateAudioBtnState(){
