@@ -852,6 +852,10 @@ function cubicBez(p0, p1, p2, p3, t){
 let telemData = {velocity: 0, distEarth: 0, distMoon: 0};
 let horizonsOK = false;
 
+// Interpolation: store two snapshots and lerp between them at 60fps
+let snapA = null; // previous snapshot {t, distEarth, distMoon, velocity}
+let snapB = null; // latest snapshot
+
 // Build a Horizons API URL for Orion (-1024) relative to a center body
 function horizonsUrl(center){
   const now = new Date();
@@ -949,6 +953,15 @@ async function fetchHorizons(){
       telemData.distMoon = Math.max(0, EARTH_MOON_DIST - telemData.distEarth + 16900);
     }
 
+    // Store snapshot for interpolation
+    snapA = snapB;
+    snapB = {
+      t: Date.now(),
+      distEarth: telemData.distEarth,
+      distMoon: telemData.distMoon,
+      velocity: telemData.velocity
+    };
+
     // Mission progress
     missionProgress = Math.min(telemData.distEarth / EARTH_MOON_DIST, 0.48);
 
@@ -1003,7 +1016,31 @@ function simulateTelemetry(){
 
 function fmt(n){ return Math.floor(n).toLocaleString('en-US') }
 
+// Interpolate between two Horizons snapshots for smooth ticking
+function interpolateTelemetry(){
+  if(!snapB) return; // no data yet
+  if(!snapA){
+    // Only one snapshot: extrapolate using velocity
+    const dt = (Date.now() - snapB.t) / 3600000; // hours since snapshot
+    const velMiPerHr = snapB.velocity; // already in mph
+    telemData.distEarth = snapB.distEarth + velMiPerHr * dt;
+    telemData.distMoon  = snapB.distMoon - velMiPerHr * dt;
+    telemData.velocity  = snapB.velocity;
+    return;
+  }
+  // Two snapshots: lerp and extrapolate beyond
+  const span = snapB.t - snapA.t;
+  const now = Date.now();
+  const frac = (now - snapA.t) / span;
+  telemData.distEarth = snapA.distEarth + (snapB.distEarth - snapA.distEarth) * frac;
+  telemData.distMoon  = snapA.distMoon  + (snapB.distMoon  - snapA.distMoon)  * frac;
+  telemData.velocity  = snapA.velocity  + (snapB.velocity  - snapA.velocity)  * frac;
+}
+
 function updateTelemetryUI(){
+  // Interpolate live data between API fetches
+  if(horizonsOK) interpolateTelemetry();
+
   // MET
   const elapsed = Math.max(0, Date.now() - LAUNCH_UTC);
   const totalMin = Math.floor(elapsed / 60000);
@@ -1400,8 +1437,8 @@ function init(){
   fetchHorizons();
   fetchNews();
 
-  // Refresh telemetry every 2 minutes
-  setInterval(fetchHorizons, 120000);
+  // Refresh telemetry every 60s, interpolate between fetches at 60fps
+  setInterval(fetchHorizons, 60000);
   // Refresh news every 5 minutes
   setInterval(fetchNews, 300000);
 }
