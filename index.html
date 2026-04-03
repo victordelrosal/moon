@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>ARTEMIS II — Live Mission Tracker</title>
-<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><circle cx='50' cy='50' r='45' fill='%23888'/><circle cx='38' cy='50' r='40' fill='%23111'/></svg>">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🌓</text></svg>">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=Orbitron:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@300;400;500&display=swap" rel="stylesheet">
 <style>
@@ -44,7 +44,7 @@ canvas#stars{position:fixed;inset:0;z-index:0}
     "crew   center right"
     "footer footer footer";
   gap:0;
-  padding:24px 28px 20px;
+  padding:24px 28px 48px;
 }
 
 /* --- Header --- */
@@ -233,13 +233,97 @@ canvas#trajectory{
 /* --- Footer (Telemetry Bar) --- */
 .footer{
   grid-area:footer;
-  display:flex;justify-content:center;align-items:center;
-  padding-top:8px;gap:20px;
+  padding-top:8px;
+}
+
+/* --- News Ticker (Bloomberg/CNN style) --- */
+.ticker-wrap{
+  position:fixed;bottom:0;left:0;right:0;z-index:50;
+  height:38px;
+  background:linear-gradient(180deg,rgba(0,10,20,.95),rgba(0,6,14,.98));
+  border-top:1px solid rgba(0,229,255,.15);
+  display:flex;align-items:stretch;
+  font-family:'Space Grotesk',sans-serif;
+  overflow:hidden;
+}
+.ticker-brand{
+  display:flex;align-items:center;gap:8px;
+  padding:0 16px;
+  background:linear-gradient(135deg,#00e5ff,#0088aa);
+  color:#000;
+  font-family:'Orbitron',monospace;
+  font-weight:700;font-size:11px;letter-spacing:2px;
+  white-space:nowrap;flex-shrink:0;
+  position:relative;z-index:2;
+}
+.ticker-brand::after{
+  content:'';position:absolute;right:-12px;top:0;bottom:0;width:12px;
+  background:linear-gradient(135deg,#0088aa,transparent);
+}
+.ticker-live{
+  width:6px;height:6px;border-radius:50%;
+  background:#ff0000;box-shadow:0 0 6px #ff0000;
+  animation:pulse 1.5s ease-in-out infinite;
+}
+.ticker-separator{
+  display:flex;align-items:center;padding:0 14px;flex-shrink:0;
+  background:rgba(0,229,255,.08);
+  border-left:1px solid rgba(0,229,255,.1);
+  border-right:1px solid rgba(0,229,255,.1);
+}
+.ticker-stat{
+  display:flex;align-items:center;gap:6px;white-space:nowrap;
+}
+.ticker-stat-label{
+  font-size:8px;letter-spacing:1.5px;text-transform:uppercase;
+  color:rgba(0,229,255,.6);
+}
+.ticker-stat-val{
+  font-family:'Orbitron',monospace;font-size:12px;font-weight:600;
+  color:#fff;letter-spacing:.5px;
+}
+.ticker-stat-unit{
+  font-size:8px;color:var(--gray);letter-spacing:1px;margin-left:2px;
+}
+.ticker-scroll-area{
+  flex:1;overflow:hidden;position:relative;
+  mask-image:linear-gradient(90deg,transparent,#000 40px,#000 calc(100% - 40px),transparent);
+  -webkit-mask-image:linear-gradient(90deg,transparent,#000 40px,#000 calc(100% - 40px),transparent);
+}
+.ticker-track{
+  display:flex;align-items:center;height:100%;
+  animation:ticker-scroll var(--ticker-dur, 60s) linear infinite;
+  width:max-content;
+}
+.ticker-track:hover{animation-play-state:paused}
+@keyframes ticker-scroll{
+  0%{transform:translateX(0)}
+  100%{transform:translateX(-50%)}
+}
+.ticker-item{
+  display:flex;align-items:center;gap:10px;
+  padding:0 24px;white-space:nowrap;height:100%;
+}
+.ticker-item-dot{
+  width:4px;height:4px;border-radius:50%;flex-shrink:0;
+}
+.ticker-item-source{
+  font-size:8px;letter-spacing:1.5px;text-transform:uppercase;
+  font-weight:600;
+}
+.ticker-item-text{
+  font-size:12px;color:rgba(255,255,255,.85);
+}
+.ticker-item-time{
+  font-size:9px;color:var(--gray);
+}
+.ticker-divider{
+  color:rgba(0,229,255,.2);font-size:10px;padding:0 4px;
 }
 
 /* --- Data status --- */
 .data-status{
-  position:fixed;bottom:8px;left:28px;z-index:5;
+  position:fixed;bottom:42px;left:28px;z-index:51;
   font-size:9px;letter-spacing:1px;color:var(--gray);
   display:flex;align-items:center;gap:6px;
 }
@@ -421,6 +505,44 @@ canvas#trajectory{
   </div>
 
   <div class="footer"></div>
+</div>
+
+<!-- NEWS TICKER -->
+<div class="ticker-wrap">
+  <div class="ticker-brand">
+    <div class="ticker-live"></div>
+    ARTEMIS II
+  </div>
+  <div class="ticker-separator">
+    <div class="ticker-stat">
+      <span class="ticker-stat-label">MET</span>
+      <span class="ticker-stat-val" id="tickMet">--:--:--</span>
+    </div>
+  </div>
+  <div class="ticker-separator">
+    <div class="ticker-stat">
+      <span class="ticker-stat-label">VEL</span>
+      <span class="ticker-stat-val" id="tickVel">--</span>
+      <span class="ticker-stat-unit">MPH</span>
+    </div>
+  </div>
+  <div class="ticker-separator">
+    <div class="ticker-stat">
+      <span class="ticker-stat-label">EARTH</span>
+      <span class="ticker-stat-val" id="tickEarth">--</span>
+      <span class="ticker-stat-unit">MI</span>
+    </div>
+  </div>
+  <div class="ticker-separator">
+    <div class="ticker-stat">
+      <span class="ticker-stat-label">MOON</span>
+      <span class="ticker-stat-val" id="tickMoon">--</span>
+      <span class="ticker-stat-unit">MI</span>
+    </div>
+  </div>
+  <div class="ticker-scroll-area">
+    <div class="ticker-track" id="tickerTrack"></div>
+  </div>
 </div>
 
 <!-- Legend Modal -->
@@ -833,6 +955,13 @@ function updateTelemetryUI(){
   // Flight day
   const fd = Math.floor(elapsed / 86400000) + 1;
   document.getElementById('flightDay').textContent = fd;
+
+  // Ticker telemetry
+  const metStr = String(d).padStart(2,'0') + ':' + String(h).padStart(2,'0') + ':' + String(m).padStart(2,'0');
+  document.getElementById('tickMet').textContent = metStr;
+  document.getElementById('tickVel').textContent = fmt(telemData.velocity);
+  document.getElementById('tickEarth').textContent = fmt(telemData.distEarth);
+  document.getElementById('tickMoon').textContent = fmt(telemData.distMoon);
 }
 
 // ============================================================
@@ -931,6 +1060,9 @@ async function fetchNews(){
     `;
     feed.appendChild(el);
   }
+
+  // Update ticker with news
+  buildTicker(allNews);
 }
 
 function timeAgo(date){
@@ -941,6 +1073,68 @@ function timeAgo(date){
   if(hrs < 24) return hrs + 'h ago';
   const days = Math.floor(hrs / 24);
   return days + 'd ago';
+}
+
+// ============================================================
+//  NEWS TICKER
+// ============================================================
+const TICKER_BULLETINS = [
+  { src:'NASA', color:'#00e5ff', text:'Artemis II crew successfully completes Trans-Lunar Injection burn, spacecraft now coasting toward the Moon' },
+  { src:'FLIGHT', color:'#00ff88', text:'Orion spacecraft traveling at over 5,000 MPH on hybrid free-return trajectory to lunar flyby' },
+  { src:'JSC', color:'#ff8c00', text:'Mission Control Houston confirms all systems nominal aboard Orion MPCV on Flight Day 3' },
+  { src:'CREW', color:'#cc77ff', text:'Commander Reid Wiseman reports crew in good health and spirits as they watch Earth shrink through the window' },
+  { src:'CSA', color:'#ff5577', text:'Jeremy Hansen becomes first Canadian astronaut to leave low Earth orbit' },
+  { src:'ESA', color:'#00e5ff', text:'European Service Module performing flawlessly, providing power and propulsion for Orion spacecraft' },
+  { src:'NASA', color:'#00e5ff', text:'Artemis II on track for lunar flyby on April 6 at approximately 4,700 miles above the lunar surface' },
+  { src:'CAPCOM', color:'#00ff88', text:'Next major milestone: passive thermal control roll maneuver scheduled in 6 hours' },
+  { src:'FLIGHT', color:'#ff8c00', text:'Deep Space Network tracking stations in Goldstone, Canberra, and Madrid maintaining continuous contact' },
+  { src:'NASA', color:'#00e5ff', text:'First crewed mission beyond low Earth orbit since Apollo 17 in December 1972, over 53 years ago' },
+  { src:'SCIENCE', color:'#cc77ff', text:'Crew conducting radiation environment monitoring with Hybrid Electronic Radiation Assessor (HERA)' },
+  { src:'PUBLIC', color:'#ffcc00', text:'Over 1.2 million viewers watching NASA live streams worldwide as Orion heads to the Moon' },
+];
+
+let lastNewsItems = [];
+
+function buildTicker(newsItems){
+  const track = document.getElementById('tickerTrack');
+  const items = [];
+
+  // Mix bulletins with real news
+  TICKER_BULLETINS.forEach(b => {
+    items.push({ src: b.src, color: b.color, text: b.text });
+  });
+
+  // Add real RSS news
+  if(newsItems && newsItems.length){
+    lastNewsItems = newsItems;
+  }
+  lastNewsItems.slice(0, 8).forEach(n => {
+    items.push({ src: n.source.toUpperCase(), color: '#00e5ff', text: n.title });
+  });
+
+  // Build doubled content for seamless loop
+  let html = '';
+  for(let repeat = 0; repeat < 2; repeat++){
+    items.forEach((item, i) => {
+      html += `<div class="ticker-item">
+        <div class="ticker-item-dot" style="background:${item.color};box-shadow:0 0 4px ${item.color}"></div>
+        <span class="ticker-item-source" style="color:${item.color}">${item.src}</span>
+        <span class="ticker-item-text">${item.text}</span>
+      </div>`;
+      if(i < items.length - 1) html += '<span class="ticker-divider">|</span>';
+    });
+    if(repeat === 0) html += '<span class="ticker-divider" style="padding:0 30px">|</span>';
+  }
+
+  track.innerHTML = html;
+
+  // Set animation duration based on content width
+  requestAnimationFrame(() => {
+    const fullWidth = track.scrollWidth / 2;
+    const speed = 80; // pixels per second
+    const dur = fullWidth / speed;
+    track.style.setProperty('--ticker-dur', dur + 's');
+  });
 }
 
 // ============================================================
@@ -1123,6 +1317,7 @@ function init(){
   initStars();
   resizeTraj();
   buildAudioChannels();
+  buildTicker();
 
   // Initial simulated data while Horizons loads
   simulateTelemetry();
