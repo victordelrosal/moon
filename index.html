@@ -940,13 +940,11 @@ function simulateTelemetry(){
   const elapsed = Date.now() - LAUNCH_UTC;
   const elapsedHrs = elapsed / 3600000;
 
-  // Calibrated against AROW data points:
-  // At MET ~37h: Earth=79,643mi, Moon=175,724mi, Vel=4,580mph
-  // Outbound coast: distance grows ~2,100 mi/hr initially, slowing as Moon gravity takes over
-  // Velocity decreases from ~5,500 at TLI to ~2,500 near Moon, then speeds up on flyby
+  // Calibrated against NASA AROW data:
+  // At MET 37.77h (coastHrs 35.77): Earth=81,107mi, Moon=174,704mi, Vel=4,524mph
+  // TLI burn ~2h after launch, then trans-lunar coast to Moon flyby ~day 4
 
-  // TLI burn at ~24h, before that spacecraft is in Earth orbit (~200mi altitude)
-  const tliTime = 24; // hours into mission when TLI occurred
+  const tliTime = 2; // TLI burn ~2h after launch
 
   if(elapsedHrs < tliTime){
     // Earth orbit phase
@@ -954,24 +952,20 @@ function simulateTelemetry(){
     telemData.velocity = 17500 + Math.sin(elapsedHrs * 0.3) * 200;
     telemData.distMoon = EARTH_MOON_DIST - telemData.distEarth;
   } else {
-    // Trans-lunar coast
     const coastHrs = elapsedHrs - tliTime;
-    const coastDays = coastHrs / 24;
 
-    // Distance from Earth: starts at ~400mi, reaches ~238,900mi at flyby (~day 5 of coast)
-    // Use sqrt curve: fast initial increase, slowing down
-    const maxCoastHrs = 120; // ~5 days to Moon
-    const coastFrac = Math.min(coastHrs / maxCoastHrs, 1);
+    // Distance from Earth: power law calibrated to AROW
+    // At coastHrs=35.77 → 81,107mi; at coastHrs~96 → ~238,900mi (Moon flyby)
+    telemData.distEarth = 250 + 1610 * Math.pow(coastHrs, 1.095);
 
-    // Polynomial fit to match AROW: at 13h coast = ~80,000mi
-    telemData.distEarth = 400 + (EARTH_MOON_DIST - 5000) * Math.pow(coastFrac, 0.72);
+    // Velocity: inverse power law calibrated to AROW
+    // At coastHrs=35.77 → 4,524mph; decays from ~20,000 after TLI
+    telemData.velocity = 4524 * Math.pow(35.77 / Math.max(coastHrs, 0.5), 0.415);
+    telemData.velocity = Math.min(24000, telemData.velocity);
+    telemData.velocity += Math.sin(Date.now() * 0.00008) * 30;
+    if(coastHrs > 80) telemData.velocity += (coastHrs - 80) * 150; // lunar gravity speedup
 
-    // Velocity: starts ~5,500mph after TLI, decreases to ~2,500 near Moon approach
-    // Then increases during flyby due to lunar gravity
-    telemData.velocity = 5500 - 3000 * Math.pow(coastFrac, 0.5) + Math.sin(Date.now() * .00008) * 30;
-    if(coastFrac > 0.85) telemData.velocity += (coastFrac - 0.85) * 20000; // lunar gravity speedup
-
-    telemData.distMoon = Math.max(0, EARTH_MOON_DIST - telemData.distEarth + 16500);
+    telemData.distMoon = Math.max(0, EARTH_MOON_DIST - telemData.distEarth + 16900);
   }
 
   // Mission progress for trajectory visualization
