@@ -887,7 +887,9 @@ function horizonsUrl(center){
     + `&START_TIME='${start}'`
     + `&STOP_TIME='${stop}'`
     + `&STEP_SIZE='1m'`
-    + `&VEC_TABLE='2'`;
+    + `&VEC_TABLE='2'`
+    + `&OUT_UNITS='KM-S'`
+    + `&OBJ_DATA='NO'`;
 }
 
 // Parse Horizons text result into {dist (km), vel (km/s)}
@@ -950,21 +952,29 @@ async function fetchHorizons(){
     if(earthData && earthData.result){
       const parsed = parseHorizons(earthData.result);
       if(parsed){
-        telemData.distEarth = parsed.dist * KM_TO_MI;
-        telemData.velocity  = parsed.vel * KMS_TO_MPH;
-        gotEarth = true;
+        const eMi = parsed.dist * KM_TO_MI;
+        const vMph = parsed.vel * KMS_TO_MPH;
+        // Sanity check: Earth distance should be 1,000+ mi after TLI
+        if(eMi > 1000 && eMi < 300000 && vMph > 500 && vMph < 30000){
+          telemData.distEarth = eMi;
+          telemData.velocity  = vMph;
+          gotEarth = true;
+        }
       }
     }
 
     if(moonData && moonData.result){
       const parsed = parseHorizons(moonData.result);
       if(parsed){
-        telemData.distMoon = parsed.dist * KM_TO_MI;
-        gotMoon = true;
+        const mMi = parsed.dist * KM_TO_MI;
+        if(mMi > 0 && mMi < 300000){
+          telemData.distMoon = mMi;
+          gotMoon = true;
+        }
       }
     }
 
-    if(!gotEarth) throw new Error('No Earth vector data');
+    if(!gotEarth) throw new Error('No valid Earth vector data');
 
     // If Moon query failed, estimate from Earth distance
     if(!gotMoon){
