@@ -905,9 +905,9 @@ function parseHorizons(result){
   const lines = block.split('\n').map(l => l.trim()).filter(l => l);
   let x=0,y=0,z=0,vx=0,vy=0,vz=0;
   for(const line of lines){
-    const xm = line.match(/X\s*=\s*([-\d.E+]+)/);
-    const ym = line.match(/Y\s*=\s*([-\d.E+]+)/);
-    const zm = line.match(/Z\s*=\s*([-\d.E+]+)/);
+    const xm = line.match(/(?<!V)X\s*=\s*([-\d.E+]+)/);
+    const ym = line.match(/(?<!V)Y\s*=\s*([-\d.E+]+)/);
+    const zm = line.match(/(?<!V)Z\s*=\s*([-\d.E+]+)/);
     if(xm) x = parseFloat(xm[1]);
     if(ym) y = parseFloat(ym[1]);
     if(zm) z = parseFloat(zm[1]);
