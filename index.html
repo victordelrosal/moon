@@ -277,6 +277,28 @@ canvas#trajectory{
 <body>
 
 <canvas id="stars"></canvas>
+
+<!-- Ghost video layer: Artemis II launch footage, ultra-faint -->
+<div id="ghostVideo" style="
+  position:fixed;inset:0;z-index:0;
+  overflow:hidden;pointer-events:none;
+  opacity:0.07;
+  mix-blend-mode:screen;
+">
+  <iframe id="ghostFrame"
+    src="https://www.youtube.com/embed/GRkAvgnCYok?autoplay=1&mute=1&loop=1&playlist=GRkAvgnCYok&controls=0&showinfo=0&rel=0&modestbranding=1&playsinline=1&enablejsapi=1"
+    allow="autoplay; encrypted-media"
+    style="
+      position:absolute;
+      top:50%;left:50%;
+      width:180vw;height:180vh;
+      transform:translate(-50%,-50%);
+      border:none;
+      filter:grayscale(0.6) contrast(1.3);
+    "
+  ></iframe>
+</div>
+
 <div class="scanlines"></div>
 
 <div class="dashboard">
