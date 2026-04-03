@@ -491,15 +491,13 @@ canvas#trajectory{
   </div>
 </div>
 
-<!-- YouTube players: fixed at bottom, near-invisible but in viewport for browser compliance -->
-<div id="ytPlayerContainer" style="position:fixed;bottom:0;left:0;width:4px;height:4px;overflow:hidden;opacity:0.01;pointer-events:none;z-index:-1">
-  <div id="ytP0"></div>
-  <div id="ytP1"></div>
-  <div id="ytP2"></div>
-  <div id="ytP3"></div>
-  <div id="ytP4"></div>
-  <div id="ytP5"></div>
-</div>
+<!-- YouTube players: full-size iframes behind everything, invisible but not clipped -->
+<div id="ytP0" style="position:fixed;bottom:0;left:0;width:320px;height:180px;opacity:0;pointer-events:none;z-index:-10"></div>
+<div id="ytP1" style="position:fixed;bottom:0;left:320px;width:320px;height:180px;opacity:0;pointer-events:none;z-index:-10"></div>
+<div id="ytP2" style="position:fixed;bottom:0;left:640px;width:320px;height:180px;opacity:0;pointer-events:none;z-index:-10"></div>
+<div id="ytP3" style="position:fixed;bottom:0;left:960px;width:320px;height:180px;opacity:0;pointer-events:none;z-index:-10"></div>
+<div id="ytP4" style="position:fixed;bottom:0;left:1280px;width:320px;height:180px;opacity:0;pointer-events:none;z-index:-10"></div>
+<div id="ytP5" style="position:fixed;bottom:0;left:1600px;width:320px;height:180px;opacity:0;pointer-events:none;z-index:-10"></div>
 
 <script>
 // ============================================================
@@ -964,9 +962,9 @@ function timeAgo(date){
 const AUDIO_FEEDS = [
   { id:'comms',    label:'Mission Control',   icon:'\u{1F4E1}', videoId:'m3kR2KK8TEs', desc:'Live air-to-ground comms',     vol:40, color:'#00ff88' },
   { id:'ambient',  label:'Deep Space Ambient',icon:'\u{1F3B5}', videoId:'53zsGGcUEQg', desc:'Ambient soundscape',           vol:35, color:'#00e5ff' },
-  { id:'nasatv',   label:'NASA TV Live',      icon:'\u{1F4FA}', videoId:'21X5lGlDOfg', desc:'NASA Television stream',       vol:30, color:'#ff8c00' },
-  { id:'score',    label:'Interstellar Score', icon:'\u{1F30D}', videoId:'IDsCtDRV2uA', desc:'Hans Zimmer, cinematic',       vol:25, color:'#cc77ff' },
-  { id:'earthrise',label:'Earthrise',         icon:'\u{1F315}', videoId:'CHSbx2L6CWE', desc:'Space documentary soundtrack', vol:25, color:'#ff5577' },
+  { id:'nasatv',   label:'NASA TV Live',      icon:'\u{1F4FA}', videoId:'nA9UZF-SZoQ', desc:'NASA Television stream',       vol:30, color:'#ff8c00' },
+  { id:'score',    label:'Gravity Score',      icon:'\u{1F30D}', videoId:'LZ-BsZq3RVs', desc:'Steven Price, cinematic',      vol:25, color:'#cc77ff' },
+  { id:'earthrise',label:'Space Odyssey',      icon:'\u{1F315}', videoId:'oU4Rk0NATNs', desc:'2001 ambient soundscape',     vol:25, color:'#ff5577' },
   { id:'apollo',   label:'Apollo Era Comms',  icon:'\u{1F680}', videoId:'cAZpMtl9ZeE', desc:'Historic mission audio',       vol:30, color:'#ffcc00' },
 ];
 
