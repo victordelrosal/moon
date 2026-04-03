@@ -540,6 +540,9 @@ canvas#trajectory{
       <span class="ticker-stat-unit">MI</span>
     </div>
   </div>
+  <div class="ticker-separator" style="border-right:none">
+    <span id="tickTime" style="font-family:'JetBrains Mono',monospace;font-size:10px;color:rgba(255,255,255,.5);white-space:nowrap"></span>
+  </div>
   <div class="ticker-scroll-area">
     <div class="ticker-track" id="tickerTrack"></div>
   </div>
@@ -612,7 +615,7 @@ canvas#trajectory{
 // ============================================================
 //  CONSTANTS
 // ============================================================
-const LAUNCH_UTC = Date.UTC(2026, 3, 1, 17, 0, 0); // Apr 1 2026 17:00 UTC
+const LAUNCH_UTC = Date.UTC(2026, 3, 1, 22, 36, 0); // Apr 1 2026 22:36 UTC (matches AROW MET)
 const KM_TO_MI   = 0.621371;
 const KMS_TO_MPH = 2236.936;
 const EARTH_MOON_DIST = 238900; // avg miles
@@ -864,12 +867,21 @@ async function fetchHorizons(){
     + `&STEP_SIZE='1'`
     + `&VEC_TABLE='2'`;
 
-  // Use CORS proxy since JPL Horizons doesn't set Access-Control-Allow-Origin
-  const proxyUrl = 'https://corsproxy.io/?' + encodeURIComponent(baseUrl);
+  // Try multiple CORS proxies
+  const proxies = [
+    'https://corsproxy.io/?' + encodeURIComponent(baseUrl),
+    'https://api.allorigins.win/raw?url=' + encodeURIComponent(baseUrl),
+  ];
 
   try {
-    const res = await fetch(proxyUrl);
-    const data = await res.json();
+    let data = null;
+    for(const proxy of proxies){
+      try {
+        const r = await fetch(proxy, {signal: AbortSignal.timeout(8000)});
+        if(r.ok){ data = await r.json(); break; }
+      } catch(e){ continue; }
+    }
+    if(!data) throw new Error('All proxies failed');
     const result = data.result || '';
 
     // Parse state vector from $$SOE ... $$EOE
@@ -926,14 +938,45 @@ async function fetchHorizons(){
 
 function simulateTelemetry(){
   const elapsed = Date.now() - LAUNCH_UTC;
-  const missionDur = 10 * 86400000;
-  const prog = Math.min(elapsed / missionDur, 1);
-  missionProgress = prog;
+  const elapsedHrs = elapsed / 3600000;
 
-  // Simulate velocity (trans-lunar coast ~2000-5000 mph)
-  telemData.velocity = 3200 + Math.sin(prog * Math.PI) * 2200 + Math.sin(Date.now() * .0001) * 40;
-  telemData.distEarth = prog * EARTH_MOON_DIST * 0.9 + 5000;
-  telemData.distMoon = Math.max(0, EARTH_MOON_DIST - telemData.distEarth + 10000);
+  // Calibrated against AROW data points:
+  // At MET ~37h: Earth=79,643mi, Moon=175,724mi, Vel=4,580mph
+  // Outbound coast: distance grows ~2,100 mi/hr initially, slowing as Moon gravity takes over
+  // Velocity decreases from ~5,500 at TLI to ~2,500 near Moon, then speeds up on flyby
+
+  // TLI burn at ~24h, before that spacecraft is in Earth orbit (~200mi altitude)
+  const tliTime = 24; // hours into mission when TLI occurred
+
+  if(elapsedHrs < tliTime){
+    // Earth orbit phase
+    telemData.distEarth = 250 + Math.sin(elapsedHrs * 0.5) * 50;
+    telemData.velocity = 17500 + Math.sin(elapsedHrs * 0.3) * 200;
+    telemData.distMoon = EARTH_MOON_DIST - telemData.distEarth;
+  } else {
+    // Trans-lunar coast
+    const coastHrs = elapsedHrs - tliTime;
+    const coastDays = coastHrs / 24;
+
+    // Distance from Earth: starts at ~400mi, reaches ~238,900mi at flyby (~day 5 of coast)
+    // Use sqrt curve: fast initial increase, slowing down
+    const maxCoastHrs = 120; // ~5 days to Moon
+    const coastFrac = Math.min(coastHrs / maxCoastHrs, 1);
+
+    // Polynomial fit to match AROW: at 13h coast = ~80,000mi
+    telemData.distEarth = 400 + (EARTH_MOON_DIST - 5000) * Math.pow(coastFrac, 0.72);
+
+    // Velocity: starts ~5,500mph after TLI, decreases to ~2,500 near Moon approach
+    // Then increases during flyby due to lunar gravity
+    telemData.velocity = 5500 - 3000 * Math.pow(coastFrac, 0.5) + Math.sin(Date.now() * .00008) * 30;
+    if(coastFrac > 0.85) telemData.velocity += (coastFrac - 0.85) * 20000; // lunar gravity speedup
+
+    telemData.distMoon = Math.max(0, EARTH_MOON_DIST - telemData.distEarth + 16500);
+  }
+
+  // Mission progress for trajectory visualization
+  const totalMissionHrs = 10 * 24;
+  missionProgress = Math.min(elapsedHrs / totalMissionHrs, 1);
 }
 
 function fmt(n){ return Math.floor(n).toLocaleString('en-US') }
@@ -962,6 +1005,11 @@ function updateTelemetryUI(){
   document.getElementById('tickVel').textContent = fmt(telemData.velocity);
   document.getElementById('tickEarth').textContent = fmt(telemData.distEarth);
   document.getElementById('tickMoon').textContent = fmt(telemData.distMoon);
+
+  // Ticker timestamp
+  const now = new Date();
+  document.getElementById('tickTime').textContent =
+    now.toUTCString().slice(17, 25) + ' UTC';
 }
 
 // ============================================================
